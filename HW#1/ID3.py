@@ -8,16 +8,17 @@ def ID3(examples, default):
   and the target class variable is a special attribute with the name "Class".
   Any missing attributes are denoted with a value of "?"
   '''
-
   target_poss = {} 
 
+  # how many times each Class variable appears
   for i in examples:
     target_poss[i["Class"]] += 1;
-  
+
+  entropy = calculate_entropy(target_poss)
+
+  max(entropy, key=entropy.get)
 
 
-
-  
 
 def prune(node, examples):
   '''
