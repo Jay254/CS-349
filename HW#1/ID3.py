@@ -37,3 +37,14 @@ def evaluate(node, example):
   Takes in a tree and one example.  Returns the Class value that the tree
   assigns to the example.
   '''
+
+def calculate_entropy(dictionary):
+  '''
+  Helper function to calculate entropy for a chosen attribute.
+  '''
+  entropy = 0
+  totalCount = sum(dictionary.values())
+  for label, count in dictionary:
+    if count > 0:
+      entropy = - (count/totalCount) * math.log2(count/totalCount)
+  return entropy
