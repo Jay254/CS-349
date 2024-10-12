@@ -41,11 +41,21 @@ def evaluate(node, example):
 
 def calculate_entropy(dictionary):
   '''
-  Helper function to calculate entropy for a chosen attribute.
+  Helper function to calculate entropy. Returns a dictionary of attributes with entropy values.
   '''
-  entropy = 0
+  #Create empty dictionary
+  entropyDictionary = {}
+  #Calculate total count for probability calculation
   totalCount = sum(dictionary.values())
-  for label, count in dictionary:
+  #Loop through dictionary, calculate entropy for each label
+  for label, count in dictionary.items():
+    
     if count > 0:
-      entropy = - (count/totalCount) * math.log2(count/totalCount)
-  return entropy
+      #Calculate probability
+      probability = count/totalCount
+      #Calculate entropy
+      entropy = - (probability) * math.log2(probability)
+    #Assign calculated entropy to label
+    entropyDictionary[label] = entropy
+
+  return entropyDictionary
