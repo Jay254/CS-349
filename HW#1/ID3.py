@@ -18,8 +18,6 @@ def ID3(examples, default):
 
   max(entropy, key=entropy.get)
 
-
-
 def prune(node, examples):
   '''
   Takes in a trained tree and a validation set of examples.  Prunes nodes in order
