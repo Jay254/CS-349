@@ -9,3 +9,6 @@ class Node:
   def add_children(self, child):
     self.children.append(child)
 
+  def set_label(self, label):
+    self.label = label
+

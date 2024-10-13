@@ -8,15 +8,52 @@ def ID3(examples, default):
   and the target class variable is a special attribute with the name "Class".
   Any missing attributes are denoted with a value of "?"
   '''
+
+  t = Node()
   target_poss = {} 
+  no_attribs = True
 
   # how many times each Class variable appears
   for i in examples:
-    target_poss[i["Class"]] += 1;
+    key = i["Class"]
+    target_poss[key] += 1;
+    if len(target_poss[key]) > 1:
+      # if there are attributes in a dataset, then
+      # we can compute it
+      no_attribs = False
+
+  if no_attribs:
+    return t
 
   entropy = calculate_entropy(target_poss)
 
-  max(entropy, key=entropy.get)
+  max_keys = dict_max(entropy)
+  
+  if len(max_keys) > 1:
+    # if there is more than one max key
+    # just use given default
+    t.set_label(default)
+  else:
+    t.set_label(max_keys[0])
+
+def dict_max(d):
+  '''
+  Takes a dictionary
+  Returns list of keys with maximum values
+  '''
+  max_val = 0
+  max_keys = []
+
+  for i in d.keys:
+    key = i
+    val = d[i]
+    if max_val < val:
+      max_val = val
+      max_keys = [key]
+    elif max_val == val:
+      max_keys.append(key)
+
+  return max_keys
 
 def prune(node, examples):
   '''
