@@ -29,7 +29,7 @@ def ID3(examples, default):
   # Decide best split best off information gain
   starting_entropy = get_entropy_from_data(examples, "Class", is_first_node=True)
 
-  feature_to_split: tuple = choose_feature_split(examples, starting_entropy)
+  attribute_to_split: tuple = choose_attribute_split(examples, starting_entropy)
 
   # root_node = Node(first_split[0], None, examples)
   
@@ -85,25 +85,25 @@ def evaluate(node, example):
 
 ### EJ Functions ###
 
-def get_feature_data(data: list, feature_name: str, target="Class"):
+def get_attribute_data(data: list, attribute_name: str, target="Class"):
   """ 
-  Returns a dictionary of dictionaries with each attribute from the feature as keys
+  Returns a dictionary of dictionaries with each  from the attribute as keys
   and the values being dictionaries with targets as keys and their counts as values along with # of observations
-  E.G. "Color" feature from mushroom example -> {"red": {"Total": 2, "toxic": 1, "eatable": 1}, "green": ...}
+  E.G. "Color" attribute from mushroom example -> {"red": {"Total": 2, "toxic": 1, "eatable": 1}, "green": ...}
 
   Parameters:
   data: list of dictionaries (what parse() outputs)
-  feature_name: Name of feature to extract data of
+  attribute_name: Name of attribute to extract data of
   target: Final column with result (all data sets use "Class" as the column header for targets)
   """
 
-  feature_dict = {}
-  feature_data = []
+  attribute_dict = {}
+  attribute_data = []
 
   try:
     # For each row in data, makes tuple of that rows attribute and target 
     # i.e. [("red", "eatable"), ("brown", "toxic"), ...]
-    feature_data = list(zip([row[feature_name] for row in data],
+    attribute_data = list(zip([row[attribute_name] for row in data],
                               [row[target] for row in data]))
   
   except Exception as e:
@@ -111,15 +111,15 @@ def get_feature_data(data: list, feature_name: str, target="Class"):
     return
 
 
-  for cur_atrbt, cur_target in feature_data:
-    atrbt_exists = cur_atrbt in feature_dict
+  for cur_atrbt, cur_target in attribute_data:
+    item_exists = cur_atrbt in attribute_dict
 
-    # Check if attribute is in dictionary yet
-    if not atrbt_exists: 
+    # Check if item is in dictionary yet
+    if not item_exists: 
       # Initializing dict to hold targets and their counts for the attribute
-      feature_dict[cur_atrbt] = {"Total": 1, cur_target: 1}
+      attribute_dict[cur_item] = {"Total": 1, cur_target: 1}
     else:
-      target_dict = feature_dict[cur_atrbt]
+      target_dict = attribute_dict[cur_item]
 
       # Ensure we count values correctly with dictionary check
       if not cur_target in target_dict:
@@ -131,65 +131,65 @@ def get_feature_data(data: list, feature_name: str, target="Class"):
         target_dict[cur_target] += 1
         target_dict["Total"] += 1
   
-  return feature_dict, len(feature_data)
+  return attribute_dict, len(attribute_data)
 
 
 # get_entropy(...) -> Calculates entropy of data with first-node handling
 #
-# parameter: feature_dict -> dict of dicts with attributes as keys and dicts w/ targets as keys
+# parameter: attribute_dict -> dict of dicts with attributes as keys and dicts w/ targets as keys
 # parameter: num_observations -> total # of values in data for entropy calc
 # parameter: is_first_node -> used to handle (different) instructions for calculation if this is the first node
-def get_entropy(feature_dict: dict, num_observations: int, is_first_node: False):
+def get_entropy(attribute_dict: dict, num_observations: int, is_first_node: False):
 
-  feature_entropy = 0.0
+  attribute_entropy = 0.0
 
 
-  for attribute in feature_dict:
-    target_dict = feature_dict[attribute]
+  for item in attribute_dict:
+    target_dict = attribute_dict[attribute]
 
-    # Iterating over all attributes, so must handle current attribute entropy while at it
-    attr_entropy = 0.0
+    # Iterating over all attributes, so must handle current item entropy while at it
+    item_entropy = 0.0
 
     for cur_target in target_dict:
       # 'Total' is included in every target_dict, but not needed until later
       if(cur_target == "Total"): continue
 
-      # First node entropy only uses "Class" feature (target) data, so it requires different instructions
+      # First node entropy only uses "Class" attribute (target) data, so it requires different instructions
       if is_first_node:
         target_probability = target_dict["Total"] / num_observations
-        feature_entropy += (target_probability * math.log2(target_probability))
+        attribute_entropy += (target_probability * math.log2(target_probability))
 
       target_probability = (target_dict[cur_target] / target_dict["Total"])
-      attr_entropy += target_probability * math.log2(target_probability)
+      item_entropy += target_probability * math.log2(target_probability)
 
     # Must sum values of targets entropy before multiplying by neg. 1
-    attr_entropy *= -1
-    attr_probability = (feature_dict[attribute]["Total"]) / num_observations
+    item_entropy *= -1
+    item_probability = (attribute_dict[item]["Total"]) / num_observations
 
 
-    feature_entropy += (attr_entropy * attr_probability)
+    attribute_entropy += (item_entropy * item_probability)
 
-  # First node entropy uses different equation than entropy of entire feature, so multiply neg. 1 to correct
+  # First node entropy uses different equation than entropy of entire attribute, so multiply neg. 1 to correct
   if is_first_node:
-    return feature_entropy * -1
+    return item_entropy * -1
   
-  return feature_entropy
+  return item_entropy
 
 
-# get_entropy_from_data(...) -> Extrapolates differnet functions to more easily get entropy of feature with
+# get_entropy_from_data(...) -> Extrapolates different functions to more easily get entropy of attribute with
 #                               broader data set
 # This is pretty straightforward, so I won't bother with parameters :-|
-def get_entropy_from_data(data: list, feature_name: str, is_first_node: False):
+def get_entropy_from_data(data: list, attribute_name: str, is_first_node: False):
 
-  feature_dict = get_feature_data(data, feature_name)[0]
-  num_observations = get_feature_data(data, feature_name)[1]
+  attribute_dict = get_attribute_data(data, attribute_name)[0]
+  num_observations = get_attribute_data(data, attribute_name)[1]
 
-  entropy = get_entropy(feature_dict, num_observations, is_first_node)
+  entropy = get_entropy(attribute_dict, num_observations, is_first_node)
 
   return entropy
 
 
-# get_informaiton_gain(...) -> Calculates information gain for the current node
+# get_information_gain(...) -> Calculates information gain for the current node
 #
 # parameters: Both are super straightforward again so I'm not gonna bother :-\
 def get_information_gain(parent_entropy: float, node_entropy: float) -> float:
@@ -197,53 +197,51 @@ def get_information_gain(parent_entropy: float, node_entropy: float) -> float:
 
 
 
-def get_features(data) -> [str]:
-  features = list([observation for observation in data][0].keys())
-  features.remove("Class")
-  return features
+def get_attributes(data) -> List[str]:  # typing is not like a normal thing in Python,
+                                        # so we would need to import Typing package
+  attributes = list([observation for observation in data][0].keys())
+  attributes.remove("Class")
+  return attributes
 
 
-#TODO: This algorithim will only pick a new feature if its info gain is GREATER 
-#TODO: than the previous feature ergo it doesn't deal with ties which could be good
+#TODO: This algorithim will only pick a new attribute if its info gain is GREATER 
+#TODO: than the previous attribute ergo it doesn't deal with ties which could be good
 #TODO: for getting the "best" tree
-def choose_feature_split(data: list, parent_entropy: float):
+def choose_attribute_split(data: list, parent_entropy: float):
   """
-  Finds entropy of existing features and splits based off highest information gain
+  Finds entropy of existing attributes and splits based off highest information gain
 
 
 
   Parameters:
   
   """
-  # Setting default values for first element of loop -> tuple(feature_name, info_gain, entropy)
-  best_feature = ("foo", -1, None)
-  for cur_feature in get_features(data):
-    cur_entropy = get_entropy_from_data(data, cur_feature, is_first_node=False)
+  # Setting default values for first element of loop -> tuple(attribute_name, info_gain, entropy)
+  best_attribute = ("foo", -1, None)
+  for cur_attribute in get_attributes(data):
+    cur_entropy = get_entropy_from_data(data, cur_attribute, is_first_node=False)
 
     cur_info_gain = get_information_gain(parent_entropy, cur_entropy)
-    if cur_info_gain > best_feature[1]:
-      best_feature = (cur_feature, cur_info_gain, cur_entropy)
+    if cur_info_gain > best_attribute[1]:
+      best_attribute = (cur_attribute, cur_info_gain, cur_entropy)
 
-  return best_feature
+  return best_attribute
 
 
-def split_data(original_data, feature_to_split):
+def split_data(original_data, attribute_to_split):
 
   possible_attributes = {}
 
   for observation in original_data:
     # {"color": "red", "points": "yes", "Size": "Small", "Eatiablility": "Eatable"}
 
-    cur_attr = observation[feature_to_split] # -> "red"
-    del observation[feature_to_split]
+    cur_item = observation[attribute_to_split] # -> "red"
+    del observation[attribute_to_split]
 
-    if not cur_attr in possible_attributes:
-      # Remove the feature we are splitting on
-      possible_attributes[cur_attr] = [observation]
+    if not cur_item in possible_attributes:
+      # Remove the attribute we are splitting on
+      possible_attributes[cur_item] = [observation]
     else:
-      possible_attributes[cur_attr].append(observation)
+      possible_attributes[cur_item].append(observation)
 
   return possible_attributes
-
-
-
