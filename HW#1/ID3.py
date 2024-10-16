@@ -10,14 +10,14 @@ def ID3(examples, default):
   and the target class variable is a special attribute with the name "Class".
   Any missing attributes are denoted with a value of "?"
   '''
-  t = Node()
-  target_poss = {} 
-  no_attribs = True
+  t = Node() # single node tree to start
+  target_poss = {} # all possible target values
+  no_attribs = True # whether or not attributes is empty
 
   # how many times each Class variable appears
-  for i in examples:
-    key = i["Class"]
-    target_poss[key] += 1;
+  for i in examples: # going through each dictionary
+    key = i["Class"] # checking the "Class" attribute of each example
+    target_poss[key] += 1; # adding to frequency
     if len(target_poss[key]) > 1:
       # if there are attributes in a dataset, then
       # we can compute it
