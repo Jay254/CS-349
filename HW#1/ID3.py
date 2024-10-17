@@ -245,3 +245,6 @@ def split_data(original_data, attribute_to_split):
       possible_attributes[cur_item].append(observation)
 
   return possible_attributes
+
+def random_forest(n_estimators, max_features, min_sample_leaf):
+  pass
