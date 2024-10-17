@@ -101,7 +101,7 @@ def get_attribute_data(data: list, attribute_name: str, target="Class"):
   attribute_data = []
 
   try:
-    # For each row in data, makes tuple of that rows attribute and target 
+    # For each row in data, makes tuple of that row's attribute and target 
     # i.e. [("red", "eatable"), ("brown", "toxic"), ...]
     attribute_data = list(zip([row[attribute_name] for row in data],
                               [row[target] for row in data]))
@@ -111,8 +111,8 @@ def get_attribute_data(data: list, attribute_name: str, target="Class"):
     return
 
 
-  for cur_atrbt, cur_target in attribute_data:
-    item_exists = cur_atrbt in attribute_dict
+  for cur_item, cur_target in attribute_data:
+    item_exists = cur_item in attribute_dict
 
     # Check if item is in dictionary yet
     if not item_exists: 
