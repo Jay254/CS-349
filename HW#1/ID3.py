@@ -145,7 +145,7 @@ def get_entropy(attribute_dict: dict, num_observations: int, is_first_node: Fals
 
 
   for item in attribute_dict:
-    target_dict = attribute_dict[attribute]
+    target_dict = attribute_dict[item]
 
     # Iterating over all attributes, so must handle current item entropy while at it
     item_entropy = 0.0
