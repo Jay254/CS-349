@@ -1,250 +1,350 @@
 from node import Node
 import math
-# TODO: Get rid of 'import parse' when done - not native to the file - its just here to test data easily
-from parse import parse
+from collections import defaultdict
+
 
 def ID3(examples, default):
-  '''
-  Takes in an array of examples, and returns a tree (an instance of Node) 
-  trained on the examples.  Each example is a dictionary of attribute:value pairs,
-  and the target class variable is a special attribute with the name "Class".
-  Any missing attributes are denoted with a value of "?"
-  '''
-  t = Node() # single node tree to start
-  target_poss = {} # all possible target values
-  no_attribs = True # whether or not attributes is empty
+	"""
+	Takes in an array of examples, and returns a tree (an instance of Node)
+	trained on the examples.  Each example is a dictionary of attribute:value pairs,
+	and the target class variable is a special attribute with the name "Class".
+	Any missing attributes are denoted with a value of "?"
+	"""
+	# If examples empty, return leaf node with default class
+	if not examples:
+		return Node(label=default)
 
-  # how many times each Class variable appears
-  for i in examples: # going through each dictionary
-    key = i["Class"] # checking the "Class" attribute of each example
-    target_poss[key] += 1; # adding to frequency
-    if len(target_poss[key]) > 1:
-      # if there are attributes in a dataset, then
-      # we can compute it
-      no_attribs = False
+	# Get the majority class from current examples to use as default
+	default = get_majority_class(examples)
 
-  if no_attribs:
-    return t
+	# Base case 2: If all examples have same class, return leaf node with that class
+	if all_same_class(examples):
+		return Node(label=examples[0]["Class"])
 
-  # Decide best split best off information gain
-  starting_entropy = get_entropy_from_data(examples, "Class", is_first_node=True)
+	# Get list of all attributes except the class attribute
+	attributes = get_attributes(examples)
 
-  attribute_to_split: tuple = choose_attribute_split(examples, starting_entropy)
+	# Base case 3: If no attributes left, return leaf node with majority class
+	if not attributes:
+		return Node(label=default)
 
-  # root_node = Node(first_split[0], None, examples)
-  
-  max_keys = dict_max(entropy)
-  
-  if len(max_keys) > 1:
-    # if there is more than one max key
-    # just use given default
-    t.set_label(default)
-  else:
-    t.set_label(max_keys[0])
-    
-  return t
+	# Find the attribute that gives the highest information gain
+	best_attribute = find_best_attribute(examples, attributes)
 
-def dict_max(d):
-  '''
-  Takes a dictionary
-  Returns list of keys with maximum values
-  '''
-  max_val = 0
-  max_keys = []
+	# Create a new internal node using the best attribute
+	root = Node(key=best_attribute)
 
-  for i in d.keys:
-    key = i
-    val = d[i]
-    if max_val < val:
-      max_val = val
-      max_keys = [key]
-    elif max_val == val:
-      max_keys.append(key)
+	# Get all possible values for the best attribute
+	attribute_values = get_attribute_values(examples, best_attribute)
 
-  return max_keys
+	# For each value of the best attribute, create a subtree
+	for value in attribute_values:
+		# Get subset of examples that have this value for best_attribute
+		examples_i = get_examples_with_value(examples, best_attribute, value)
+
+		# If no examples with this value, create leaf node with default class
+		if not examples_i:
+			root.children[value] = Node(label=default)
+		else:
+			# Recursively build subtree for this subset of examples
+			subtree = ID3(examples_i, default)
+			root.children[value] = subtree
+			subtree.parent = root  # Set parent pointer for pruning
+
+	return root
+
 
 def prune(node, examples):
-  '''
-  Takes in a trained tree and a validation set of examples.  Prunes nodes in order
-  to improve accuracy on the validation data; the precise pruning strategy is up to you.
-  '''
+	"""
+	Takes in a trained tree and a validation set of examples.  Prunes nodes in order
+	to improve accuracy on the validation data; the precise pruning strategy is up to you.
+	"""
+	if not node or not examples:
+		return
+
+	# If it's already a leaf node, nothing to prune
+	if not node.children:
+		return
+
+	# First, recursively prune children
+	# We need to group examples by their attribute values
+	for value, child in node.children.items():
+		# Get examples that would reach this child
+		child_examples = [e for e in examples if e.get(node.key) == value]
+		prune(child, child_examples)
+
+	# After pruning children, check if this node should be pruned
+	# Calculate accuracy before pruning
+	pre_prune_correct = sum(1 for e in examples if evaluate(node, e) == e["Class"])
+	pre_prune_accuracy = pre_prune_correct / len(examples) if examples else 0
+
+	# Store original state
+	original_children = node.children.copy()
+	original_key = node.key
+
+	# Try converting to leaf node with majority class from examples
+	class_counts = defaultdict(int)
+	for example in examples:
+		class_counts[example["Class"]] += 1
+
+	majority_class = (
+		max(class_counts.items(), key=lambda x: x[1])[0] if class_counts else node.label
+	)
+
+	# Convert to leaf node temporarily
+	node.children = {}
+	node.key = None
+	node.label = majority_class
+
+	# Calculate accuracy after pruning
+	post_prune_correct = sum(1 for e in examples if evaluate(node, e) == e["Class"])
+	post_prune_accuracy = post_prune_correct / len(examples) if examples else 0
+
+	# If accuracy decreased or stayed the same, revert the pruning
+	if post_prune_accuracy <= pre_prune_accuracy:
+		node.children = original_children
+		node.key = original_key
+		node.label = None
+
 
 def test(node, examples):
-  '''
-  Takes in a trained tree and a test set of examples.  Returns the accuracy (fraction
-  of examples the tree classifies correctly).
-  '''
+	"""
+	Takes in a trained tree and a test set of examples.  Returns the accuracy (fraction
+	of examples the tree classifies correctly).
+	"""
+	if not examples:
+		return 0
+
+	# Count correct predictions
+	correct = 0
+	for example in examples:
+		if evaluate(node, example) == example["Class"]:
+			correct += 1
+
+	return correct / len(examples)
 
 
 def evaluate(node, example):
-  '''
-  Takes in a tree and one example.  Returns the Class value that the tree
-  assigns to the example.
-  '''
+	"""
+	Takes in a tree and one example.  Returns the Class value that the tree
+	assigns to the example.
+	"""
+	# Base case: if this is a leaf node, return its label
+	if node.label is not None:
+		return node.label
+
+	# Get the value of the attribute we're testing at this node
+	value = example.get(node.key, "?")
+
+	# Handle missing values (denoted by '?')
+	if value == "?":
+		# Use majority class across all children
+		majority_counts = defaultdict(int)
+		total_weight = 0
+
+		# Weight each child's contribution by number of training examples
+		for child in node.children.values():
+			if child.label is not None:
+				# For leaf nodes, add their class
+				majority_counts[child.label] += 1
+				total_weight += 1
+			else:
+				# For internal nodes, recursively evaluate
+				subtree_result = evaluate(child, example)
+				if subtree_result is not None:
+					majority_counts[subtree_result] += 1
+					total_weight += 1
+
+		# If we found any valid classes, return the majority
+		if total_weight > 0:
+			return max(majority_counts.items(), key=lambda x: x[1])[0]
+		# If no valid classes found, propagate up the tree
+		return None
+
+	# If value not found in children, return majority class from node
+	if value not in node.children:
+		majority_class = get_majority_class_from_node(node)
+		return majority_class if majority_class is not None else node.label
+
+	# Recursively evaluate the appropriate child node
+	result = evaluate(node.children[value], example)
+	return result if result is not None else node.label
 
 
-### EJ Functions ###
+# Helper functions
+def get_majority_class_from_node(node):
+	"""
+	Determines most common class from a node's children.
+	Args:
+			node: The node to analyze
+	Returns:
+			The most common class among child nodes or None if no majority found
+	"""
+	class_counts = {}
 
-def get_attribute_data(data: list, attribute_name: str, target="Class"):
-  """ 
-  Returns a dictionary of dictionaries with each  from the attribute as keys
-  and the values being dictionaries with targets as keys and their counts as values along with # of observations
-  E.G. "Color" attribute from mushroom example -> {"red": {"Total": 2, "toxic": 1, "eatable": 1}, "green": ...}
+	# Count classes from all children
+	for child in node.children.values():
+		if child.label is not None:
+			if child.label not in class_counts:
+				class_counts[child.label] = 0
+			class_counts[child.label] += 1
+		else:
+			# For internal nodes, recursively get majority class
+			child_majority = get_majority_class_from_node(child)
+			if child_majority is not None:
+				if child_majority not in class_counts:
+					class_counts[child_majority] = 0
+				class_counts[child_majority] += 1
 
-  Parameters:
-  data: list of dictionaries (what parse() outputs)
-  attribute_name: Name of attribute to extract data of
-  target: Final column with result (all data sets use "Class" as the column header for targets)
-  """
+	# Return the majority class if we found any
+	if not class_counts:
+		return None
 
-  attribute_dict = {}
-  attribute_data = []
-
-  try:
-    # For each row in data, makes tuple of that row's attribute and target 
-    # i.e. [("red", "eatable"), ("brown", "toxic"), ...]
-    attribute_data = list(zip([row[attribute_name] for row in data],
-                              [row[target] for row in data]))
-  
-  except Exception as e:
-    print(f"Error occured: {e}")
-    return
-
-
-  for cur_item, cur_target in attribute_data:
-    item_exists = cur_item in attribute_dict
-
-    # Check if item is in dictionary yet
-    if not item_exists: 
-      # Initializing dict to hold targets and their counts for the attribute
-      attribute_dict[cur_item] = {"Total": 1, cur_target: 1}
-    else:
-      target_dict = attribute_dict[cur_item]
-
-      # Ensure we count values correctly with dictionary check
-      if not cur_target in target_dict:
-        target_dict[cur_target] = 1
-        # Need to keep track of attributes total count for entropy calculation
-        target_dict["Total"] += 1
-
-      else:
-        target_dict[cur_target] += 1
-        target_dict["Total"] += 1
-  
-  return attribute_dict, len(attribute_data)
+	return max(class_counts, key=class_counts.get)
 
 
-# get_entropy(...) -> Calculates entropy of data with first-node handling
-#
-# parameter: attribute_dict -> dict of dicts with attributes as keys and dicts w/ targets as keys
-# parameter: num_observations -> total # of values in data for entropy calc
-# parameter: is_first_node -> used to handle (different) instructions for calculation if this is the first node
-def get_entropy(attribute_dict: dict, num_observations: int, is_first_node: False):
-
-  attribute_entropy = 0.0
+# Helper Functions
 
 
-  for item in attribute_dict:
-    target_dict = attribute_dict[item]
-
-    # Iterating over all attributes, so must handle current item entropy while at it
-    item_entropy = 0.0
-
-    for cur_target in target_dict:
-      # 'Total' is included in every target_dict, but not needed until later
-      if(cur_target == "Total"): continue
-
-      # First node entropy only uses "Class" attribute (target) data, so it requires different instructions
-      if is_first_node:
-        target_probability = target_dict["Total"] / num_observations
-        attribute_entropy += (target_probability * math.log2(target_probability))
-
-      target_probability = (target_dict[cur_target] / target_dict["Total"])
-      item_entropy += target_probability * math.log2(target_probability)
-
-    # Must sum values of targets entropy before multiplying by neg. 1
-    item_entropy *= -1
-    item_probability = (attribute_dict[item]["Total"]) / num_observations
+def get_attributes(examples):
+	"""
+	Returns list of all attributes except the class attribute.
+	"""
+	if not examples:
+		return []
+	return [attr for attr in examples[0].keys() if attr != "Class"]
 
 
-    attribute_entropy += (item_entropy * item_probability)
-
-  # First node entropy uses different equation than entropy of entire attribute, so multiply neg. 1 to correct
-  if is_first_node:
-    return item_entropy * -1
-  
-  return item_entropy
-
-
-# get_entropy_from_data(...) -> Extrapolates different functions to more easily get entropy of attribute with
-#                               broader data set
-# This is pretty straightforward, so I won't bother with parameters :-|
-def get_entropy_from_data(data: list, attribute_name: str, is_first_node: False):
-
-  attribute_dict = get_attribute_data(data, attribute_name)[0]
-  num_observations = get_attribute_data(data, attribute_name)[1]
-
-  entropy = get_entropy(attribute_dict, num_observations, is_first_node)
-
-  return entropy
+def get_attribute_values(examples, attribute):
+	"""
+	Gets all unique values for a given attribute, excluding missing values.
+	Args:
+			examples: List of example dictionaries
+			attribute: The attribute to get values for
+	Returns:
+			set: All unique values for the attribute
+	"""
+	values = set()
+	for example in examples:
+		if example[attribute] != "?":
+			values.add(example[attribute])
+	return values
 
 
-# get_information_gain(...) -> Calculates information gain for the current node
-#
-# parameters: Both are super straightforward again so I'm not gonna bother :-\
-def get_information_gain(parent_entropy: float, node_entropy: float) -> float:
-  return parent_entropy - node_entropy
+def all_same_class(examples):
+	"""
+	Checks if all examples have the same class value.
+	Args:
+			examples: List of example dictionaries
+	Returns:
+			bool: True if all examples have same class, False otherwise
+	"""
+	if not examples:
+		return True
+	first_class = examples[0]["Class"]
+	return all(ex["Class"] == first_class for ex in examples)
 
 
-
-def get_attributes(data) -> List[str]:  # typing is not like a normal thing in Python,
-                                        # so we would need to import Typing package
-  attributes = list([observation for observation in data][0].keys())
-  attributes.remove("Class")
-  return attributes
-
-
-#TODO: This algorithim will only pick a new attribute if its info gain is GREATER 
-#TODO: than the previous attribute ergo it doesn't deal with ties which could be good
-#TODO: for getting the "best" tree
-def choose_attribute_split(data: list, parent_entropy: float):
-  """
-  Finds entropy of existing attributes and splits based off highest information gain
-
-
-
-  Parameters:
-  
-  """
-  # Setting default values for first element of loop -> tuple(attribute_name, info_gain, entropy)
-  best_attribute = ("foo", -1, None)
-  for cur_attribute in get_attributes(data):
-    cur_entropy = get_entropy_from_data(data, cur_attribute, is_first_node=False)
-
-    cur_info_gain = get_information_gain(parent_entropy, cur_entropy)
-    if cur_info_gain > best_attribute[1]:
-      best_attribute = (cur_attribute, cur_info_gain, cur_entropy)
-
-  return best_attribute
+def get_majority_class(examples):
+	"""
+	Determines the most common class in a set of examples.
+	Args:
+			examples: List of example dictionaries
+	Returns:
+			The most common class value
+	"""
+	if not examples:
+		return None
+	class_counts = defaultdict(int)
+	for example in examples:
+		class_counts[example["Class"]] += 1
+	return max(class_counts.items(), key=lambda x: x[1])[0]
 
 
-def split_data(original_data, attribute_to_split):
+def get_examples_with_value(examples, attribute, value):
+	"""
+	Returns subset of examples with given attribute value.
+	Args:
+			examples: List of example dictionaries
+			attribute: The attribute to filter on
+			value: The value to filter for
+	Returns:
+			list: Filtered examples
+	"""
+	return [ex for ex in examples if ex[attribute] == value]
 
-  possible_attributes = {}
 
-  for observation in original_data:
-    # {"color": "red", "points": "yes", "Size": "Small", "Eatiablility": "Eatable"}
+def calculate_entropy(examples):
+	"""
+	Calculates entropy for a set of examples.
+	Entropy = -Σ(p_i * log2(p_i)) where p_i is probability of class i
+	Args:
+			examples: List of example dictionaries
+	Returns:
+			float: Entropy value
+	"""
+	if not examples:
+		return 0
 
-    cur_item = observation[attribute_to_split] # -> "red"
-    del observation[attribute_to_split]
+	# Count occurrences of each class
+	class_counts = defaultdict(int)
+	total = len(examples)
 
-    if not cur_item in possible_attributes:
-      # Remove the attribute we are splitting on
-      possible_attributes[cur_item] = [observation]
-    else:
-      possible_attributes[cur_item].append(observation)
+	for example in examples:
+		class_counts[example["Class"]] += 1
 
-  return possible_attributes
+	# Calculate entropy using the entropy formula
+	entropy = 0
+	for count in class_counts.values():
+		probability = count / total
+		entropy -= probability * math.log2(probability)
 
-def random_forest(n_estimators, max_features, min_sample_leaf):
-  pass
+	return entropy
+
+
+def calculate_information_gain(examples, attribute):
+	"""
+	Calculates information gain for splitting on an attribute.
+	Gain(S,A) = Entropy(S) - Σ((|Sv|/|S|) * Entropy(Sv))
+	Args:
+			examples: List of example dictionaries
+			attribute: Attribute to calculate gain for
+	Returns:
+			float: Information gain value
+	"""
+	# Calculate entropy before split
+	initial_entropy = calculate_entropy(examples)
+
+	# Get all possible values for this attribute
+	values = get_attribute_values(examples, attribute)
+
+	# Calculate weighted entropy after split
+	weighted_entropy = 0
+	total_examples = len(examples)
+
+	for value in values:
+		examples_i = get_examples_with_value(examples, attribute, value)
+		weight = len(examples_i) / total_examples
+		weighted_entropy += weight * calculate_entropy(examples_i)
+
+	# Information gain is difference between initial and weighted entropy
+	return initial_entropy - weighted_entropy
+
+
+def find_best_attribute(examples, attributes):
+	"""
+	Finds attribute with highest information gain.
+	Args:
+			examples: List of example dictionaries
+			attributes: List of attributes to consider
+	Returns:
+			str: Name of the best attribute
+	"""
+	if not attributes:
+			return None
+
+	# Calculate information gain for each attribute
+	gains = {attr: calculate_information_gain(examples, attr) for attr in attributes}
+
+	# Return attribute with highest gain
+	return max(gains.items(), key=lambda x: x[1])[0]
