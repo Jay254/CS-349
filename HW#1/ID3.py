@@ -105,7 +105,8 @@ def prune(node, examples):
 		node.children = original_children
 		node.key = original_key
 		node.label = None
-
+		
+	return node
 
 def test(node, examples):
 	"""

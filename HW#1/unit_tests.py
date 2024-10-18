@@ -97,7 +97,7 @@ def testPruningOnHouseData(inFile):
 		acc = ID3.test(tree, test)
 		print("test accuracy: ", acc)
 
-		ID3.prune(tree, valid)
+		tree = ID3.prune(tree, valid)
 		acc = ID3.test(tree, train)
 		print("pruned tree train accuracy: ", acc)
 		acc = ID3.test(tree, valid)
@@ -125,37 +125,59 @@ def testPruningOnHouseData(inFile):
 def testPruningOnData(trainFile, validFile, testFile, default):
 	withPruning = []
 	withoutPruning = []
+	train_acc = []
+	valid_acc = []
+	test_acc = []
+	train_prune = []
+	valid_prune = []
 	train = parse.parse(trainFile)
 	valid = parse.parse(validFile)
 	test = parse.parse(testFile)
 
-	tree = ID3.ID3(train, default)
-	acc = ID3.test(tree, train) # accuracy
-	print("training accuracy: ", acc)
-	acc = ID3.test(tree, valid)
-	print("validation accuracy: ", acc)
-	acc = ID3.test(tree, test)
-	print("test accuracy: ", acc)
+	for i in range(100):
+		tree = ID3.ID3(train, default)
+		acc = ID3.test(tree, train) # accuracy
+		train_acc.append(acc)
+		# print("training accuracy: ", acc)
+		acc = ID3.test(tree, valid)
+		valid_acc.append(acc)
+		# print("validation accuracy: ", acc)
+		acc = ID3.test(tree, test)
+		test_acc.append(acc)
+		# print("test accuracy: ", acc)
 
-	ID3.prune(tree, valid)
-	acc = ID3.test(tree, train)
-	print("pruned tree train accuracy: ", acc)
-	acc = ID3.test(tree, valid)
-	print("pruned tree validation accuracy: ", acc)
-	acc = ID3.test(tree, test)
-	print("pruned tree test accuracy: ", acc)
-	withPruning.append(acc)
+		tree = ID3.prune(tree, valid)
+		acc = ID3.test(tree, train)
+		train_prune.append(acc)
+		# print("pruned tree train accuracy: ", acc)
+		acc = ID3.test(tree, valid)
+		valid_prune.append(acc)
+		# print("pruned tree validation accuracy: ", acc)
+		acc = ID3.test(tree, test)
+		# print("pruned tree test accuracy: ", acc)
+		withPruning.append(acc)
 
-	tree = ID3.ID3(train + valid, default)
-	acc = ID3.test(tree, test)
-	print("no pruning test accuracy: ", acc)
-	withoutPruning.append(acc)
-	print(withPruning)
-	print(withoutPruning)
+		tree = ID3.ID3(train + valid, default)
+		acc = ID3.test(tree, test)
+		# print("no pruning test accuracy: ", acc)
+		withoutPruning.append(acc)
+
+	# print(withPruning)
+	# print(withoutPruning)
 	print(
-		"average with pruning",
+		"\naverage training accuracy",
+		sum(train_acc) / len(train_acc),
+		"\naverage validation accuracy",
+		sum(valid_acc) / len(valid_acc),
+		"\naverage testing accuracy",
+		sum(test_acc) / len(test_acc),
+		"\naverage training with pruning",
+		sum(train_prune) / len(train_prune),
+		"\naverage validation with pruning",
+		sum(valid_prune) / len(valid_prune),
+		"\naverage with pruning",
 		sum(withPruning) / len(withPruning),
-		" without: ",
+		"\n without: ",
 		sum(withoutPruning) / len(withoutPruning),
 	)
 
@@ -165,4 +187,4 @@ testPruning()
 print("\nhouse data")
 testPruningOnHouseData("HW#1/house_votes_84.data")
 print("\ncar data")
-testPruningOnData("HW#1/cars_train.data", "HW#1/cars_valid.data", "HW#1/cars_test.data", "acc")
+testPruningOnData("HW#1/cars_train.data", "HW#1/cars_valid.data", "HW#1/cars_test.data", "unacc")
