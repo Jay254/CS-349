@@ -97,7 +97,7 @@ def testPruningOnHouseData(inFile):
 		acc = ID3.test(tree, test)
 		print("test accuracy: ", acc)
 
-		tree = ID3.prune(tree, valid)
+		ID3.prune(tree, valid)
 		acc = ID3.test(tree, train)
 		print("pruned tree train accuracy: ", acc)
 		acc = ID3.test(tree, valid)
@@ -122,7 +122,22 @@ def testPruningOnHouseData(inFile):
 # validFile - relative path of the valid set
 # testFile - relative path of test set
 # default - default target value
-def testPruningOnData(trainFile, validFile, testFile, default):
+def testPruningOnData(default, trainFile, validFile = None, testFile = None, training = None, validation = None, testing = None):
+	if validFile == None or testFile == None:
+		data = parse.parse(trainFile)
+		train = data[: len(data) // 2]
+		valid = data[len(data) // 2 : 3 * len(data) // 4]
+		test = data[3 * len(data) // 4 :]
+	elif trainFile != None:
+		train = parse.parse(trainFile)
+		valid = parse.parse(validFile)
+		test = parse.parse(testFile)
+	elif training != None: # just for testing purposes; this has little failsafe for people who don't do all three
+		train = training
+		valid = validation
+		test = testing
+	else:
+		print("please give data to compute")
 	withPruning = []
 	withoutPruning = []
 	train_acc = []
@@ -130,9 +145,7 @@ def testPruningOnData(trainFile, validFile, testFile, default):
 	test_acc = []
 	train_prune = []
 	valid_prune = []
-	train = parse.parse(trainFile)
-	valid = parse.parse(validFile)
-	test = parse.parse(testFile)
+
 
 	for i in range(100):
 		tree = ID3.ID3(train, default)
@@ -146,7 +159,7 @@ def testPruningOnData(trainFile, validFile, testFile, default):
 		test_acc.append(acc)
 		# print("test accuracy: ", acc)
 
-		tree = ID3.prune(tree, valid)
+		ID3.prune(tree, valid)
 		acc = ID3.test(tree, train)
 		train_prune.append(acc)
 		# print("pruned tree train accuracy: ", acc)
@@ -164,22 +177,30 @@ def testPruningOnData(trainFile, validFile, testFile, default):
 
 	# print(withPruning)
 	# print(withoutPruning)
+	train_avg = sum(train_acc) / len(train_acc)
+	valid_avg = sum(valid_acc) / len(valid_acc)
+	test_avg = sum(test_acc) / len(test_acc)
+	train_prune_avg = sum(train_prune) / len(train_prune)
+	valid_prune_avg = sum(valid_prune) / len(valid_prune)
+	withPruning_avg = sum(withPruning) / len(withPruning)
+	woPruning_avg = sum(withoutPruning) / len(withoutPruning)
 	print(
 		"\naverage training accuracy",
-		sum(train_acc) / len(train_acc),
+		train_avg,
 		"\naverage validation accuracy",
-		sum(valid_acc) / len(valid_acc),
+		valid_avg,
 		"\naverage testing accuracy",
-		sum(test_acc) / len(test_acc),
+		test_avg,
 		"\naverage training with pruning",
-		sum(train_prune) / len(train_prune),
+		train_prune_avg,
 		"\naverage validation with pruning",
-		sum(valid_prune) / len(valid_prune),
+		valid_prune_avg,
 		"\naverage with pruning",
-		sum(withPruning) / len(withPruning),
+		withPruning_avg,
 		"\n without: ",
-		sum(withoutPruning) / len(withoutPruning),
+		woPruning_avg,
 	)
+	# return [train_avg, valid_avg, test_avg, train_prune_avg, valid_prune_avg, withPruning_avg, woPruning_avg]
 
 testID3AndEvaluate()
 testID3AndTest()
@@ -187,4 +208,4 @@ testPruning()
 print("\nhouse data")
 testPruningOnHouseData("HW#1/house_votes_84.data")
 print("\ncar data")
-testPruningOnData("HW#1/cars_train.data", "HW#1/cars_valid.data", "HW#1/cars_test.data", "unacc")
+testPruningOnData("unacc", "HW#1/cars_train.data", "HW#1/cars_valid.data", "HW#1/cars_test.data")
