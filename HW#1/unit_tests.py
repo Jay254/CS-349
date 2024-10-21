@@ -90,4 +90,13 @@ def testPruningOnHouseData(inFile):
   print(withPruning)
   print(withoutPruning)
   print("average with pruning",sum(withPruning)/len(withPruning)," without: ",sum(withoutPruning)/len(withoutPruning))
+
+testID3AndEvaluate()
+testPruning()
+testID3AndTest()
+#replace the path with the relative path on your machine
+# testPruningOnHouseData('/Users/jay/Jay2024/Personal Projects/CS-349/HW#1/house_votes_84.data')
+# testPruningOnHouseData('/Users/jay/Jay2024/Personal Projects/CS-349/HW#1/cars_test.data')
+# testPruningOnHouseData('/Users/jay/Jay2024/Personal Projects/CS-349/HW#1/cars_train.data')
+# testPruningOnHouseData('/Users/jay/Jay2024/Personal Projects/CS-349/HW#1/cars_valid.data')
   
