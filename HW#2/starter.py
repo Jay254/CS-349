@@ -88,12 +88,170 @@ def pearson(a, b):
     # Final result
     return float(1 - r)
 
-# returns a list of labels for the query dataset based upon observations in the train dataset. 
-# labels should be ignored in the training set
+''' KNN functions start '''
+# returns a list of labels for the query dataset based upon labeled observations in the dataset.
 # metric is a string specifying either "euclidean" or "cosim".  
 # All hyper-parameters should be hard-coded in the algorithm.
-def kmeans(train,query,metric):
-    return(labels)
+
+def knn(data,query,metric):
+    # IMPORTANT: read_data() structures mnsit data like so:
+    # [label, [observation_data]]
+    data_start_idx = 1
+    dist_index = 1
+    label_index = 0
+
+    # Turn strings into floats to allow arithmetic
+    float_data = []
+    for observation in data:
+        float_data.append([float(observation[label_index]), [float(pixel) for pixel in observation[data_start_idx]]])
+
+    float_query = []
+    for observation in query:
+        float_query.append([float(pixel) for pixel in observation])
+
+
+    # Transform data to make program run faster
+    transformed_data = [[observation[label_index], knn_data_transformation(observation[data_start_idx])] for observation in float_data]
+    transformed_query = [knn_data_transformation(observation) for observation in float_query]
+     
+
+    # Hyperparameters:
+    k = 13 # -> num neighbors to compare
+    
+    # Keep track of k nearest neigbors for each query
+    # -> {query: [(distance1, label), (distance2, label), ...]}
+
+    # Key values must be immutable -> to use queries as keys, put them in tuples
+    query_tuple_copy = [tuple(this_query) for this_query in transformed_query]
+    closest_neighbors = {cur_query: [] for cur_query in query_tuple_copy}
+    
+    if metric == "euclidean":
+        for observation in transformed_data:
+            # print(f"Finished observation: {index}")
+            for cur_query in query_tuple_copy: 
+                # Label is present in observation data (first element), exclude it in calculation for correct distance
+                distance = euclidean(cur_query, observation[data_start_idx])
+                # Can insert distance immediatly (no checking) if we don't already have k neigbors
+                # NOTE: Converting curquery to tuple so we can use it as a dictionary key
+                if len(closest_neighbors[cur_query]) < k:
+                    closest_neighbors[cur_query].append((observation[label_index], distance))
+                    continue
+
+                # Otherwise find maximum distance element and see if cur distance is closer
+                furthest_nbr = max(closest_neighbors[cur_query], key=lambda pair: pair[dist_index])[dist_index] # gets tuple with greatest dist (furthest) and takes the distance
+
+                if distance < furthest_nbr:
+                    # remove old value
+                    closest_neighbors[cur_query].remove(max(closest_neighbors[cur_query], key=lambda pair: pair[dist_index]))
+                    # insert new one
+                    closest_neighbors[cur_query].append((observation[label_index], distance))
+
+    elif metric == "cosim":
+        for observation in transformed_data:
+            # print(f"Finished observation: {index}")
+            for cur_query in query_tuple_copy: 
+                # Label is present in observation data (first element), exclude it in calculation for correct distance
+                distance = cosim(cur_query, observation[data_start_idx])
+                # Can insert distance immediatly (no checking) if we don't already have k neigbors
+                # NOTE: Converting curquery to tuple so we can use it as a dictionary key
+                if len(closest_neighbors[cur_query]) < k:
+                    closest_neighbors[cur_query].append((observation[label_index], distance))
+                    continue
+
+                # Otherwise find value with lowest similarity
+                furthest_nbr = min(closest_neighbors[cur_query], key=lambda pair: pair[dist_index])[dist_index] # gets tuple with LOWEST similarity
+
+                if distance > furthest_nbr:
+                    # remove old value
+                    closest_neighbors[cur_query].remove(min(closest_neighbors[cur_query], key=lambda pair: pair[dist_index]))
+                    # insert new one
+                    closest_neighbors[cur_query].append((observation[label_index], distance))
+    else:
+        print(f"ERROR: Invalid distance metric: {metric}")
+        return
+    
+    # Done with getting nearest neighbors -> find mode label for each query
+    labels = knn_get_mode_label(closest_neighbors)
+
+    # print(f"Time to run (seconds): {time.time() - start_time}")
+    return labels
+
+# Transforms data to simplify and extract most important qualities in order to speed up KNN
+# This function assumes 'data' parameter does NOT include the label and only takes in a SINGLE observation
+def knn_data_transformation(observation):
+    # Hyper parameter
+    new_grid_dimension = 7 # IMPORTANT: old_grid_dimension / new_grid_dimension -> must be evenly divisible for equal number pixels per section
+    old_grid_dimension = 28
+    
+    section_dimension = int(old_grid_dimension / new_grid_dimension) # if new_grid_dimension is 7 -> 4x4 pixels in each section
+    
+    section_averages = {section_num: 0 for section_num in range(0, new_grid_dimension ** 2)}
+    
+    row_iteration = 0
+    segment_start = 0
+    row_tracker = section_dimension - 1
+    while segment_start < len(observation):
+        cur_section = int((segment_start / section_dimension) - row_iteration * new_grid_dimension)
+        section_averages[cur_section] += sum(observation[segment_start : segment_start + section_dimension])# IMPORTANT: list splicing is non-inclusive for end-point -> go 1 element further
+        segment_start += section_dimension
+        
+        if segment_start % old_grid_dimension == 0: # signifies onto next row of pixels in og image
+                if row_iteration < row_tracker:
+                    row_iteration += 1
+                else:
+                    row_tracker += section_dimension - 1
+    
+    # Done with sectioning pixels together -> find average value (black/white) for each section
+    transformed_data = [section_sum / (section_dimension ** 2) for section_sum in section_averages.values()]
+    return transformed_data
+
+# nbrs_dict -> dict on k length
+def knn_get_mode_label(nbrs_dict: dict):
+    final_labels = []
+    for query in nbrs_dict:
+        cur_freq_dict = {}
+        for label, _ in nbrs_dict[tuple(query)]:
+            if label in cur_freq_dict:
+                cur_freq_dict[label] += 1
+            else:
+                cur_freq_dict[label] = 1
+        # Get most frequent label
+        # IMPORTANT: when there are ties between most common labels,
+        #            max() simply chooses whichever element came first
+        result_label = max(cur_freq_dict, key=cur_freq_dict.get)
+        final_labels.append(result_label)
+        
+    return final_labels
+
+# Displays model accuracy on a testing set and what values it got wrong most often 
+# predictions -> list of labels from model's predictions
+# actual_values -> objective values to be compared against
+def display_incorrect_results(predictions: list, actual_values: list):
+
+
+    count = 1
+    correct = 0
+    incorrect = 0
+    incorrect_tracker = {str(number): 0 for number in range(0, 10)}
+    for prediction, actual in zip(predictions, [observation[0] for observation in actual_values]):
+        if prediction == actual:
+            print(f"{count}.) Prediction: {prediction} | Actual: {actual} -> Correct")
+            correct += 1
+        else:
+            print(f"{count}.) Prediction: {prediction} | Actual: {actual} -> Incorrect")
+            incorrect += 1
+            incorrect_tracker[actual] += 1
+
+        count += 1
+    print(f"\nAccuracy: {(correct / (incorrect + correct) * 100)}%\n")
+    print("Of the incorrect guesses, the percent that were from each number is...")
+    for number in incorrect_tracker:
+        print(f"\t{number} was {round((incorrect_tracker[number] / incorrect) * 100, 2)}% of incorrect guesses")
+
+    return (correct / (incorrect + correct) * 100)
+
+''' KNN functions end '''
+
 
 def read_data(file_name):
     
