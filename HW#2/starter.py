@@ -1,7 +1,12 @@
 # returns Euclidean distance between vectors and b
 def euclidean(a, b):
+    # read_data() doesn't convert values from csv to floats -> must do so for calculations
+    a_converted = [float(x) for x in a]
+    b_converted = [float(x) for x in b]
+
+    total = 0
     try:
-        total = sum([(x - y) ** 2 for x, y in zip(a, b)])
+        total = sum([(x - y) ** 2 for x, y in zip(a_converted, b_converted)])
 
     except Exception as e:
         # Different input lengths
@@ -13,11 +18,18 @@ def euclidean(a, b):
 
 # returns Cosine Similarity between vectors and b
 def cosim(a, b):
+    # read_data() doesn't convert values from csv to floats -> must do so for calculations
+    a_converted = [float(x) for x in a]
+    b_converted = [float(x) for x in b]
+    
+    numerator =  0
+    a_magnitude = 0
+    b_magnitude = 0
     try:
         # calculate dot product
-        numerator = sum([x * y for x, y in zip(a, b)])
-        a_magnitude = sum([x ** 2 for x in a]) ** (1 / 2)
-        b_magnitude = sum([y ** 2 for y in b]) ** (1 / 2)
+        numerator = sum([x * y for x, y in zip(a_converted, b_converted)])
+        a_magnitude = sum([x ** 2 for x in a_converted]) ** (1 / 2)
+        b_magnitude = sum([y ** 2 for y in b_converted]) ** (1 / 2)
 
     except Exception as e:
         # Different input lengths
@@ -32,9 +44,14 @@ def cosim(a, b):
 
 # returns Hamming distance between vectors and b
 def hamming(a, b):
+    # read_data() doesn't convert values from csv to floats -> must do so for calculations
+    a_converted = [float(x) for x in a]
+    b_converted = [float(x) for x in b]
+
+    dist = -1
     try:
         # x_i == y_i -> add 0 to dist, else add 1
-        dist = sum([0 if x == y else 1 for x, y in zip(a, b)])
+        dist = sum([0 if x == y else 1 for x, y in zip(a_converted, b_converted)])
     except Exception as e:
         # Different input lengths
         print(e)
@@ -45,19 +62,23 @@ def hamming(a, b):
 # returns Pearson Correkation between vectors and b
 def pearson(a, b):
     # This one is more complicated, so i am going to break it down more for easier comprehension
+    # read_data() doesn't convert values from csv to floats -> must do so for calculations
+    a_converted = [float(x) for x in a]
+    b_converted = [float(x) for x in b]
+    
     # Pearson distance = 1 - r
 
     # find r
     # get average of a and b
-    a_avg = sum(a) / len(a)
-    b_avg = sum(b) / len(b)
+    a_avg = sum(a_converted) / len(a_converted)
+    b_avg = sum(b_converted) / len(b_converted)
 
     # multiply the i-th element of a-a_avg with b-b_avg
-    numerator = sum([(cur_a - a_avg) * (cur_b - b_avg) for cur_a, cur_b in zip(a, b)])  # spaced out for readablility
+    numerator = sum([(cur_a - a_avg) * (cur_b - b_avg) for cur_a, cur_b in zip(a_converted, b_converted)])  # spaced out for readablility
 
     # get components of denominator
-    a_denom = sum([(cur_a - a_avg) ** 2 for cur_a in a]) ** (1 / 2)
-    b_denom = sum([(cur_b - b_avg) ** 2 for cur_b in b]) ** (1 / 2)
+    a_denom = sum([(cur_a - a_avg) ** 2 for cur_a in a_converted]) ** (1 / 2)
+    b_denom = sum([(cur_b - b_avg) ** 2 for cur_b in b_converted]) ** (1 / 2)
 
     # Put it all together to get r (with 0 division handling)
     if a_denom == 0 or b_denom == 0:
