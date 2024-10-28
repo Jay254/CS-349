@@ -116,7 +116,7 @@ def knn(data,query,metric):
      
 
     # Hyperparameters:
-    k = 13 # -> num neighbors to compare
+    k = 11 # -> num neighbors to compare
     
     # Keep track of k nearest neigbors for each query
     # -> {query: [(distance1, label), (distance2, label), ...]}
@@ -232,21 +232,29 @@ def display_incorrect_results(predictions: list, actual_values: list):
     count = 1
     correct = 0
     incorrect = 0
-    incorrect_tracker = {str(number): 0 for number in range(0, 10)}
+    confusion_matrix = {str(number): {str(num_2): 0 for num_2 in range(0,10)} for number in range(0, 10)}
     for prediction, actual in zip(predictions, [observation[0] for observation in actual_values]):
         if prediction == actual:
-            print(f"{count}.) Prediction: {prediction} | Actual: {actual} -> Correct")
+            # print(f"{count}.) Prediction: {prediction} | Actual: {actual} -> Correct")
             correct += 1
         else:
-            print(f"{count}.) Prediction: {prediction} | Actual: {actual} -> Incorrect")
+            # print(f"{count}.) Prediction: {prediction} | Actual: {actual} -> Incorrect")
             incorrect += 1
-            incorrect_tracker[actual] += 1
+        
+        confusion_matrix[actual][prediction] += 1
 
         count += 1
     print(f"\nAccuracy: {(correct / (incorrect + correct) * 100)}%\n")
     print("Of the incorrect guesses, the percent that were from each number is...")
-    for number in incorrect_tracker:
-        print(f"\t{number} was {round((incorrect_tracker[number] / incorrect) * 100, 2)}% of incorrect guesses")
+    # for number in incorrect_tracker:
+    #     print(f"\t{number} was {round((incorrect_tracker[number] / incorrect) * 100, 2)}% of incorrect guesses")
+
+    for actual in confusion_matrix:
+        num_wrong_guesses = sum(list(confusion_matrix[actual].values())) - confusion_matrix[actual][actual]
+        print(f"Actual label: {actual} | Incorrectly labeled {num_wrong_guesses} times")
+        for wrong_guess in confusion_matrix[actual]:
+            print(f"\tGuessed {wrong_guess} -> {confusion_matrix[actual][wrong_guess]} times")
+
 
     return (correct / (incorrect + correct) * 100)
 
