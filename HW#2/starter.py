@@ -316,9 +316,7 @@ def collaborative_filter(file_name: str, selectedUserID: int, k: int, n: int):
         recommendations[movie_id] = sum(rating) / len(rating)
 
     # Sort recomendations according to score
-    sorted_recommendations = recommendations.sort(
-        key=lambda item: item[1], reverse=True
-    )
+    sorted_recommendations = recommendations.sort(key=lambda item: item[1], reverse=True)
     list_of_recommendations = []
     count = 0
     for movie_id, rating in sorted_recommendations:
