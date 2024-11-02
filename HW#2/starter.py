@@ -260,6 +260,76 @@ def display_incorrect_results(predictions: list, actual_values: list):
 
 ''' KNN functions end '''
 
+def collaborative_filter(file_name: str, selectedUserID: int, k: int, n: int):
+
+    # Finds similar users to specified userID, recommends movies based on k-similar users
+    # File_name -> name of file
+    # userID -> ID of user that we want to recommend movies to
+    # k -> number of similar users we want to consider
+    # n -> number of movies to recommend to user
+
+    # build dictionary with userIDs and their rating for each movie
+    user_ratings = {}
+    with open(file_name, "r") as f:
+        for line in f:
+            line = line.split()
+            userID = line[0]
+            movie_id = line[1]
+            rating = line[2]
+            if userID not in user_ratings:
+                user_ratings[userID] = {}
+            user_ratings[userID][movie_id] = rating
+
+    target_ratings = user_ratings[selectedUserID]
+
+    similar_users = {}
+    for userID in user_ratings:
+        if userID == selectedUserID:
+            continue
+        similar_movies = []
+        # Find similar movies between selected user and other users
+        for movie_id in target_ratings:
+            if movie_id in user_ratings[userID]:
+                similar_movies.append(movie_id)
+
+        vector_a = []
+        vector_b = []
+        for movie_id in similar_movies:
+            vector_a.append(target_ratings[movie_id])
+            vector_b.append(user_ratings[userID][movie_id])
+        # Use cosim to find similarity "score"
+        similarity = cosim(vector_a, vector_b)
+        similar_users[userID] = similarity
+
+    # Sort in descending order
+    sorted_similar_users = similar_users.sort(key=lambda item: item[1], reverse=True)
+    k_similar_users = sorted_similar_users[:k]
+
+    recommendations = {}
+    for userID, similarity in k_similar_users:
+        for movie_id, rating in user_ratings[userID].items():
+            if movie_id not in target_ratings:
+                recommendations[movie_id] = rating * similarity
+
+    # Need to standardize ratings
+    for movie_id, rating in recommendations.items():
+        recommendations[movie_id] = sum(rating) / len(rating)
+
+    # Sort recomendations according to score
+    sorted_recommendations = recommendations.sort(
+        key=lambda item: item[1], reverse=True
+    )
+    list_of_recommendations = []
+    count = 0
+    for movie_id, rating in sorted_recommendations:
+        # Ensure recommendation count doesn't exceed amount specified in function
+        if count >= n:
+            break
+        # Append movie ids
+        list_of_recommendations.append(movie_id)
+        count += 1
+
+    return list_of_recommendations
 
 def read_data(file_name):
     
