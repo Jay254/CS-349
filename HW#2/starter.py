@@ -260,6 +260,75 @@ def display_incorrect_results(predictions: list, actual_values: list):
 
 ''' KNN functions end '''
 
+# returns a list of labels for the query dataset based upon observations in the dataset. 
+# labels should be ignored in the training set
+# metric is a string specifying either "euclidean" or "cosim".  
+# All hyper-parameters should be hard-coded in the algorithm.
+def kmeans(data,query,metric):
+    # Convert input data to float format, ignoring labels
+    float_data = [list(map(float, observation[1])) for observation in data]
+
+    # Hyper-parameter
+    k = 3  # Number of clusters
+
+    max_iterations = 100 # Maximum number of iterations to prevent infinite loops
+
+    # Step 1: Initialize centroids randomly from the data points
+    centroids = random.sample(float_data, k)
+
+    # Loop for a maximum number of iterations to refine clusters
+    for iteration in range(max_iterations):
+        # Step 2: Assign each observation to the closest centroid
+        clusters = {i: [] for i in range(k)}
+        for observation in float_data:
+            # Determine the closest centroid based on the specified metric
+            if metric == "euclidean":
+                distances = [euclidean(observation, centroids[i]) for i in range(k)]
+                closest_centroid_index = distances.index(min(distances))
+            elif metric == "cosim":
+                similarities = [cosim(observation, centroids[i]) for i in range(k)]
+                closest_centroid_index = similarities.index(max(similarities))
+            else:
+                raise ValueError(f"ERROR: Invalid distance metric: {metric}")
+            
+            # Assign the observation to the corresponding cluster
+            clusters[closest_centroid_index].append(observation)
+
+        # Step 3: Update centroids based on the current clusters
+        new_centroids = []
+        for i in range(k):
+            if clusters[i]:  # Check if cluster is not empty
+                # Calculate the new centroid as the mean of all points in the cluster
+                dimension_count = len(clusters[i][0])  # Get the number of dimensions
+                sums = [0] * dimension_count  # Initialize sums for each dimension
+                for point in clusters[i]:
+                    for dim in range(dimension_count):
+                        sums[dim] += point[dim]  # Accumulate the sums
+                new_centroid = [s / len(clusters[i]) for s in sums]  # Average each dimension
+            else:
+                # If a cluster has no points, keep the old centroid
+                new_centroid = centroids[i]  # Keep the old centroid if no points are assigned
+            new_centroids.append(new_centroid)
+
+        # Check for convergence: if centroids have not changed, exit loop
+        if new_centroids == centroids:
+            break
+        centroids = new_centroids # Update for next iteration
+
+    # Step 4: Predict labels for the query dataset based on final centroids
+    labels = []
+    for query_point in query:
+        # Determine the closest centroid for each query point
+        if metric == "euclidean":
+            distances = [euclidean(query_point, centroids[i]) for i in range(k)]
+            closest_centroid_index = distances.index(min(distances))
+        elif metric == "cosim":
+            similarities = [cosim(query_point, centroids[i]) for i in range(k)]
+            closest_centroid_index = similarities.index(max(similarities))
+        # Add the predicted label for the query point
+        labels.append(closest_centroid_index)
+    return(labels) # Return the list of predicted labels for the query points
+
 def collaborative_filter(file_name: str, selectedUserID: int, k: int, n: int):
 
     # Finds similar users to specified userID, recommends movies based on k-similar users
