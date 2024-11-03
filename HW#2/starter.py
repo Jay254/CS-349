@@ -338,16 +338,24 @@ def collaborative_filter(file_name: str, selectedUserID: int, k: int, n: int):
     # n -> number of movies to recommend to user
 
     # build dictionary with userIDs and their rating for each movie
+
+    if (k <= 0) or (n <= 0):
+        raise ValueError("Enter valid k and n values.")
+
     user_ratings = {}
     with open(file_name, "r") as f:
+        next(f)  # skip the header names
         for line in f:
             line = line.split()
             userID = line[0]
             movie_id = line[1]
-            rating = line[2]
+            rating = float(line[2])
             if userID not in user_ratings:
                 user_ratings[userID] = {}
             user_ratings[userID][movie_id] = rating
+
+    if str(selectedUserID) not in user_ratings:
+        raise KeyError("Selected UserID not found")
 
     target_ratings = user_ratings[selectedUserID]
 
@@ -371,21 +379,27 @@ def collaborative_filter(file_name: str, selectedUserID: int, k: int, n: int):
         similar_users[userID] = similarity
 
     # Sort in descending order
-    sorted_similar_users = similar_users.sort(key=lambda item: item[1], reverse=True)
+    sorted_similar_users = sorted(
+        similar_users.items(), key=lambda item: item[1], reverse=True
+    )
     k_similar_users = sorted_similar_users[:k]
 
     recommendations = {}
     for userID, similarity in k_similar_users:
         for movie_id, rating in user_ratings[userID].items():
             if movie_id not in target_ratings:
-                recommendations[movie_id] = rating * similarity
+                if movie_id not in recommendations:
+                    recommendations[movie_id] = []
+                recommendations[movie_id].append(rating * similarity)
 
     # Need to standardize ratings
     for movie_id, rating in recommendations.items():
         recommendations[movie_id] = sum(rating) / len(rating)
 
     # Sort recomendations according to score
-    sorted_recommendations = recommendations.sort(key=lambda item: item[1], reverse=True)
+    sorted_recommendations = sorted(
+        recommendations.items(), key=lambda item: item[1], reverse=True
+    )
     list_of_recommendations = []
     count = 0
     for movie_id, rating in sorted_recommendations:
