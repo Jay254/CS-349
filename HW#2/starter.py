@@ -329,6 +329,149 @@ def collaborative_filter(file_name: str, selectedUserID: int, k: int, n: int):
 
     return list_of_recommendations
 
+def collaborative_filter_plus(file_name: str, selectedUserID: int, k: int, n: int):
+
+    # Finds similar users to a specified user ID and recommends movies based on ratings, demographics, and genre preferences.
+    # File_name -> name of file
+    # userID -> ID of user that we want to recommend movies to
+    # k -> number of similar users we want to consider
+    # n -> number of movies to recommend to user
+    
+    # demographic similarity
+    def demosim(user1_demo, user2_demo):
+        age_sim = 1 - abs(int(user1_demo['age']) - int(user2_demo['age']))/100 #normalize age similarity
+        gender_sim = 1 if user1_demo['gender'] == user2_demo['gender'] else 0
+        occupation_sim = 1 if user1_demo['occupation'] == user2_demo['occupation'] else 0
+        
+        # chhosen weights for demographic features
+        weights = {'age': 0.4, 'gender': 0.3, 'occupation': 0.3}
+        return (age_sim * weights['age'] + 
+                gender_sim * weights['gender'] + 
+                occupation_sim * weights['occupation'])
+
+    #genre preference similarity
+    def gensim(user_movies):
+        genre_ratings = {}
+        genre_counts = {}
+        
+        for movie_id, (rating, genre) in user_movies.items():
+            if genre not in genre_ratings:
+                genre_ratings[genre] = []
+            genre_ratings[genre].append(float(rating))
+            genre_counts[genre] = genre_counts.get(genre, 0) + 1
+            
+        # avg rating per genre
+        genre_pref = {genre: sum(ratings)/len(ratings) 
+                           for genre, ratings in genre_ratings.items()}
+        return genre_pref, genre_counts
+
+    # parse user data
+    users_data = {}  # all user info
+    with open(file_name, 'r') as f:
+        for line in f:
+            line = line.split()
+            userID = line[0]
+            movie_id = line[1]
+            rating = line[2]
+            #title = line[3] not needed rn
+            genre = line[4]
+            age = line[5]
+            gender = line[6]
+            occupation = line[7]    
+            if userID not in users_data:
+                users_data[userID] = {
+                    'demographics': {'age': age, 'gender': gender, 'occupation': occupation},
+                    'movies': {}  # will store movie_id: (rating, genre) <- as a pair, #388 below
+                }
+            
+            # add movie's rating and genre
+            users_data[user_id]['movies'][movie_id] = (rating, genre)
+
+    # genre preferences for all users
+    for user_id in users_data:
+        genre_prefs, genre_counts = gensim(users_data[user_id]['movies'])
+        users_data[user_id]['genre_prefs'] = genre_prefs
+        users_data[user_id]['genre_counts'] = genre_counts
+
+    # get similar users
+    similar_users = {}
+    target_user = users_data[selectedUserID]
+    
+    for user_id, user_data in users_data.items():
+        if user_id == selectedUserID:#skip the user we getting recs for
+            continue
+            
+        # calculate rating similarity
+        similar_movies = set(target_user['movies'].keys()) & set(user_data['movies'].keys())
+        if similar_movies:
+            target_ratings = [float(target_user['movies'][m][0]) for m in similar_movies]
+            user_ratings = [float(user_data['movies'][m][0]) for m in similar_movies]
+            rating_sim = cosim(target_ratings, user_ratings)
+        else:
+            rating_sim = 0
+            
+        # get demographic similarity
+        demo_sim = demosim(
+            target_user['demographic'],
+            user_data['demographic']
+        )
+            
+        # get genre pref similarity
+        genre_vectors = []
+        for user in [target_user, user_data]:
+            genre_vec = []
+            all_genres = set(user['genre_counts'].keys())
+            for genre in all_genres:
+                genre_vec.append(user['genre_counts'].get(genre, 0))
+            genre_vectors.append(genre_vec)
+        
+        genre_sim = cosim(genre_vectors[0], genre_vectors[1])
+            
+        # Combine those similarities with specific weights (based on ranked intuitive importance)
+        weights = {'rating': 0.5, 'demographic': 0.3, 'genre': 0.2} #add to 1 for normalization
+        combined_sim = (rating_sim * weights['rating'] + 
+                       demo_sim * weights['demographic'] + 
+                       genre_sim * weights['genre'])
+    
+        similar_users[user_id] = combined_sim
+
+    # now get recommendations from top k similar users
+    sorted_similar_users = sorted(similar_users.items(), key=lambda x: x[1], reverse=True)
+    k_similar_users = sorted_similar_users[:k]
+    
+    # find movies rated by similar users but not by target user
+    recommendations = {}
+    target_movies = set(target_user['movies'].keys())
+    
+    for userID, similarity in k_similar_users:
+        user_movies = users_data[userID]['movies']
+        for movie_id, (rating, _) in user_movies.items():
+            if movie_id not in target_movies:
+                if movie_id not in recommendations:
+                    recommendations[movie_id] = []
+                recommendations[movie_id].append(float(rating) * similarity)
+
+    # standardize scores
+    for movie_id, scores in recommendations.items():
+        recommendations[movie_id] = sum(scores) / len(scores)
+
+    # Sort recommendations according to score
+    sorted_recommendations = sorted(recommendations.items(), key=lambda item: item[1], reverse=True)
+
+    # top n movie recommendations
+    list_of_recommendations = []
+    count = 0
+    for movie_id, rating in sorted_recommendations:
+        # Ensure recommendation count doesn't exceed amount specified in function
+        if count >= n:
+            break
+        # Append movie ids
+        list_of_recommendations.append(movie_id)
+        count += 1
+
+    return list_of_recommendations
+
+
 def read_data(file_name):
     
     data_set = []
