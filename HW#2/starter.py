@@ -15,7 +15,6 @@ def euclidean(a, b):
     # Not sure if allowed to import math -> power of 1/2 is the same thing
     return float(total ** (1 / 2))
 
-
 # returns Cosine Similarity between vectors and b
 def cosim(a, b):
     # read_data() doesn't convert values from csv to floats -> must do so for calculations
@@ -41,7 +40,6 @@ def cosim(a, b):
 
     return float(numerator / (a_magnitude * b_magnitude))
 
-
 # returns Hamming distance between vectors and b
 def hamming(a, b):
     # read_data() doesn't convert values from csv to floats -> must do so for calculations
@@ -57,7 +55,6 @@ def hamming(a, b):
         print(e)
 
     return float(dist)
-
 
 # returns Pearson Correkation between vectors and b
 def pearson(a, b):
@@ -93,7 +90,11 @@ def pearson(a, b):
 # metric is a string specifying either "euclidean" or "cosim".  
 # All hyper-parameters should be hard-coded in the algorithm.
 
-def knn(data,query,metric):
+def knn(data,query,metric,k=11):
+
+    # Hyperparameters:
+    # k = 11 # -> num neighbors to compare
+
     # IMPORTANT: read_data() structures mnsit data like so:
     # [label, [observation_data]]
     data_start_idx = 1
@@ -113,10 +114,6 @@ def knn(data,query,metric):
     # Transform data to make program run faster
     transformed_data = [[observation[label_index], knn_data_transformation(observation[data_start_idx])] for observation in float_data]
     transformed_query = [knn_data_transformation(observation) for observation in float_query]
-     
-
-    # Hyperparameters:
-    k = 11 # -> num neighbors to compare
     
     # Keep track of k nearest neigbors for each query
     # -> {query: [(distance1, label), (distance2, label), ...]}
