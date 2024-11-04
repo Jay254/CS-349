@@ -437,44 +437,67 @@ def collaborative_filter_plus(file_name: str, selectedUserID: int, k: int, n: in
         genre_ratings = {}
         genre_counts = {}
         
-        for movie_id, (rating, genre) in user_movies.items():
+        for movie_id, movie_data in user_movies.items():
+            rating, genre = movie_data
             if genre not in genre_ratings:
                 genre_ratings[genre] = []
-            genre_ratings[genre].append(float(rating))
-            genre_counts[genre] = genre_counts.get(genre, 0) + 1
+            try:
+                genre_ratings[genre].append(float(rating))
+                genre_counts[genre] = genre_counts.get(genre, 0) + 1
+            except ValueError:
+                continue
             
         # avg rating per genre
         genre_pref = {genre: sum(ratings)/len(ratings) 
                            for genre, ratings in genre_ratings.items()}
         return genre_pref, genre_counts
 
+    selectedUserID = str(selectedUserID)
+
     # parse user data
-    users_data = {}  # all user info
-    with open(file_name, 'r') as f:
-        for line in f:
-            line = line.split()
-            userID = line[0]
-            movie_id = line[1]
-            rating = line[2]
-            #title = line[3] not needed rn
-            genre = line[4]
-            age = line[5]
-            gender = line[6]
-            occupation = line[7]    
-            if userID not in users_data:
-                users_data[userID] = {
-                    'demographics': {'age': age, 'gender': gender, 'occupation': occupation},
-                    'movies': {}  # will store movie_id: (rating, genre) <- as a pair, #388 below
-                }
-            
-            # add movie's rating and genre
-            users_data[user_id]['movies'][movie_id] = (rating, genre)
+    users_data = {}
+    try:
+        with open(file_name, 'r') as f:
+            for line in f:
+                try:
+                    line = line.strip().split()
+                    if len(line) >= 8:  # Ensure we have all required fields
+                        userID = line[0]
+                        movie_id = line[1]
+                        rating = line[2]
+                        # title = line[3] #not needed rn
+                        genre = line[4]
+                        age = line[5]
+                        gender = line[6]
+                        occupation = line[7]
+                        
+                        if userID not in users_data:
+                            users_data[userID] = {
+                                'demographic': {'age': age, 'gender': gender, 'occupation': occupation},
+                                'movies': {}
+                            }
+                        
+                        users_data[userID]['movies'][movie_id] = (rating, genre)
+                except (IndexError, ValueError) as e:
+                    continue
+    except FileNotFoundError:
+        print(f"Error: File {file_name} not found")
+        return []
+
+    if selectedUserID not in users_data:
+        print(f"Error: User {selectedUserID} not found in dataset")
+        return []
 
     # genre preferences for all users
     for user_id in users_data:
-        genre_prefs, genre_counts = gensim(users_data[user_id]['movies'])
-        users_data[user_id]['genre_prefs'] = genre_prefs
-        users_data[user_id]['genre_counts'] = genre_counts
+        try:
+            genre_prefs, genre_counts = gensim(users_data[user_id]['movies'])
+            users_data[user_id]['genre_prefs'] = genre_prefs
+            users_data[user_id]['genre_counts'] = genre_counts
+        except Exception as e:
+            print(f"Error calculating genre preferences for user {user_id}: {e}")
+            users_data[user_id]['genre_prefs'] = {}
+            users_data[user_id]['genre_counts'] = {}
 
     # get similar users
     similar_users = {}
@@ -484,40 +507,44 @@ def collaborative_filter_plus(file_name: str, selectedUserID: int, k: int, n: in
         if user_id == selectedUserID:#skip the user we getting recs for
             continue
             
-        # calculate rating similarity
-        similar_movies = set(target_user['movies'].keys()) & set(user_data['movies'].keys())
-        if similar_movies:
-            target_ratings = [float(target_user['movies'][m][0]) for m in similar_movies]
-            user_ratings = [float(user_data['movies'][m][0]) for m in similar_movies]
-            rating_sim = cosim(target_ratings, user_ratings)
-        else:
-            rating_sim = 0
+        try:
+            # calculate rating similarity
+            similar_movies = set(target_user['movies'].keys()) & set(user_data['movies'].keys())
+            if similar_movies:
+                target_ratings = [float(target_user['movies'][m][0]) for m in similar_movies]
+                user_ratings = [float(user_data['movies'][m][0]) for m in similar_movies]
+                rating_sim = cosim(target_ratings, user_ratings)
+            else:
+                rating_sim = 0
+                
+            # get demographic similarity
+            demo_sim = demosim(
+                target_user['demographic'],
+                user_data['demographic']
+            )
+                
+            # get genre pref similarity
+            genre_vectors = []
+            for user in [target_user, user_data]:
+                genre_vec = []
+                all_genres = set(user['genre_counts'].keys())
+                for genre in all_genres:
+                    genre_vec.append(user['genre_counts'].get(genre, 0))
+                genre_vectors.append(genre_vec)
             
-        # get demographic similarity
-        demo_sim = demosim(
-            target_user['demographic'],
-            user_data['demographic']
-        )
-            
-        # get genre pref similarity
-        genre_vectors = []
-        for user in [target_user, user_data]:
-            genre_vec = []
-            all_genres = set(user['genre_counts'].keys())
-            for genre in all_genres:
-                genre_vec.append(user['genre_counts'].get(genre, 0))
-            genre_vectors.append(genre_vec)
+            genre_sim = cosim(genre_vectors[0], genre_vectors[1])
+                
+            # Combine those similarities with specific weights (based on ranked intuitive importance)
+            weights = {'rating': 0.5, 'demographic': 0.3, 'genre': 0.2} #add to 1 for normalization
+            combined_sim = (rating_sim * weights['rating'] + 
+                        demo_sim * weights['demographic'] + 
+                        genre_sim * weights['genre'])
         
-        genre_sim = cosim(genre_vectors[0], genre_vectors[1])
-            
-        # Combine those similarities with specific weights (based on ranked intuitive importance)
-        weights = {'rating': 0.5, 'demographic': 0.3, 'genre': 0.2} #add to 1 for normalization
-        combined_sim = (rating_sim * weights['rating'] + 
-                       demo_sim * weights['demographic'] + 
-                       genre_sim * weights['genre'])
-    
-        similar_users[user_id] = combined_sim
+            similar_users[user_id] = combined_sim
 
+        except Exception as e:
+            print(f"Error calculating similarity for user {user_id}: {e}")
+            continue
     # now get recommendations from top k similar users
     sorted_similar_users = sorted(similar_users.items(), key=lambda x: x[1], reverse=True)
     k_similar_users = sorted_similar_users[:k]
@@ -532,7 +559,11 @@ def collaborative_filter_plus(file_name: str, selectedUserID: int, k: int, n: in
             if movie_id not in target_movies:
                 if movie_id not in recommendations:
                     recommendations[movie_id] = []
-                recommendations[movie_id].append(float(rating) * similarity)
+                try:
+                    recommendations[movie_id].append(float(rating) * similarity)
+                except ValueError:
+                    continue
+                # recommendations[movie_id].append(float(rating) * similarity)
 
     # standardize scores
     for movie_id, scores in recommendations.items():
