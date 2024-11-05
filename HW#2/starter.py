@@ -291,7 +291,7 @@ def kmeans(data, query, metric, k=11):
     # transform data
     transformed_data = [[observation[label_index], knn_data_transformation(observation[data_start_idx])] for observation in float_data]
     transformed_query = [knn_data_transformation(observation) for observation in float_query]
-   #  transformed_data = [[observation[label_index], observation[data_start_idx]] for observation in float_data]
+    # transformed_data = [[observation[label_index], observation[data_start_idx]] for observation in float_data]
     # transformed_query = [observation for observation in float_query]
     # print("data transformed")
 
