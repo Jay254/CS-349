@@ -329,88 +329,132 @@ def kmeans(data,query,metric):
         labels.append(closest_centroid_index)
     return(labels) # Return the list of predicted labels for the query points
 
-def collaborative_filter(file_name: str, selectedUserID: int, k: int, n: int):
+def get_user_ratings(filename):
+    """Get ratings dictionary from a file"""
+    ratings = {}
+    with open(filename, "r") as f:
+        next(f)  # skip header
+        for line in f:
+            tokens = line.split()
+            movie_id = tokens[1]
+            rating = float(tokens[2])
+            ratings[movie_id] = rating
+    return ratings
 
-    # Finds similar users to specified userID, recommends movies based on k-similar users
-    # File_name -> name of file
-    # userID -> ID of user that we want to recommend movies to
-    # k -> number of similar users we want to consider
-    # n -> number of movies to recommend to user
 
-    # build dictionary with userIDs and their rating for each movie
-
-    if (k <= 0) or (n <= 0):
+def collaborative_filter(movielens_file: str, user_file: str, k: int, m: int):
+    # k is the number of similar users to consider
+    # m is the number of movies to recommend
+    if (k <= 0) or (m <= 0):
         raise ValueError("Enter valid k and n values.")
 
-    user_ratings = {}
-    with open(file_name, "r") as f:
-        next(f)  # skip the header names
+    # Get target users' ratings from selected file
+    target_ratings = get_user_ratings(user_file)
+
+    # Get other users' ratings from movielens file
+    other_users = {}
+    with open(movielens_file, "r") as f:
+        next(f)  # skip header
         for line in f:
-            line = line.split()
-            userID = line[0]
-            movie_id = line[1]
-            rating = float(line[2])
-            if userID not in user_ratings:
-                user_ratings[userID] = {}
-            user_ratings[userID][movie_id] = rating
+            tokens = line.split()
+            userID = tokens[0]
+            movie_id = tokens[1]
+            rating = float(tokens[2])
+            if userID not in other_users:
+                other_users[userID] = {}
+            other_users[userID][movie_id] = rating
 
-    if str(selectedUserID) not in user_ratings:
-        raise KeyError("Selected UserID not found")
-
-    target_ratings = user_ratings[selectedUserID]
-
+    # Find similar users
     similar_users = {}
-    for userID in user_ratings:
-        if userID == selectedUserID:
-            continue
+    for userID in other_users:
         similar_movies = []
-        # Find similar movies between selected user and other users
+        # Find movies that both users have rated
         for movie_id in target_ratings:
-            if movie_id in user_ratings[userID]:
+            if movie_id in other_users[userID]:
                 similar_movies.append(movie_id)
 
-        vector_a = []
-        vector_b = []
-        for movie_id in similar_movies:
-            vector_a.append(target_ratings[movie_id])
-            vector_b.append(user_ratings[userID][movie_id])
-        # Use cosim to find similarity "score"
-        similarity = cosim(vector_a, vector_b)
-        similar_users[userID] = similarity
+        if similar_movies:  # Only consider users with common movies
+            vector_a = []
+            vector_b = []
+            for movie_id in similar_movies:
+                vector_a.append(target_ratings[movie_id])
+                vector_b.append(other_users[userID][movie_id])
+            # Calculate similarity score
+            similarity = cosim(vector_a, vector_b)
+            similar_users[userID] = similarity
 
-    # Sort in descending order
+    # Get top k similar users
     sorted_similar_users = sorted(
-        similar_users.items(), key=lambda item: item[1], reverse=True
+        similar_users.items(), key=lambda x: x[1], reverse=True
     )
     k_similar_users = sorted_similar_users[:k]
 
+    # Get recommendations from similar users
     recommendations = {}
     for userID, similarity in k_similar_users:
-        for movie_id, rating in user_ratings[userID].items():
-            if movie_id not in target_ratings:
+        for movie_id, rating in other_users[userID].items():
+            if movie_id not in target_ratings:  # Only recommend unwatched movies
                 if movie_id not in recommendations:
                     recommendations[movie_id] = []
                 recommendations[movie_id].append(rating * similarity)
 
-    # Need to standardize ratings
-    for movie_id, rating in recommendations.items():
-        recommendations[movie_id] = sum(rating) / len(rating)
+    # Calculate weighted average scores
+    for movie_id in recommendations:
+        recommendations[movie_id] = sum(recommendations[movie_id]) / len(
+            recommendations[movie_id]
+        )
 
-    # Sort recomendations according to score
+    # Sort by score and get top n
     sorted_recommendations = sorted(
-        recommendations.items(), key=lambda item: item[1], reverse=True
+        recommendations.items(), key=lambda x: x[1], reverse=True
     )
-    list_of_recommendations = []
-    count = 0
-    for movie_id, rating in sorted_recommendations:
-        # Ensure recommendation count doesn't exceed amount specified in function
-        if count >= n:
-            break
-        # Append movie ids
-        list_of_recommendations.append(movie_id)
-        count += 1
 
-    return list_of_recommendations
+    recommended_movies = []
+    for movie_id, _ in sorted_recommendations[:m]:
+        recommended_movies.append(movie_id)
+
+    return recommended_movies
+
+
+def calculate_tests(recommendations: list, actual_ratings: dict):
+    # note: True positive is a movie that was recommended and appears in actual ratings.
+    # False positive is a movie that was recommended but does not appear in actual ratings.
+    # False negative is a movie that appears in actual ratings but was not recommended.
+
+    if not recommendations or not actual_ratings:
+        return 0.0, 0.0, 0.0
+
+    # Get sets for easier comparison
+    recommended_set = set(recommendations)
+    actual_set = set(actual_ratings.keys())
+
+    # Calculate metrics
+    true_positives = len(recommended_set & actual_set)  # intersection
+    false_positives = len(
+        recommended_set - actual_set
+    )  # in recommendations but not in actual ratings
+    false_negatives = len(
+        actual_set - recommended_set
+    )  # in actual ratings but not in recommendations
+
+    # Calculate precision and recall
+    if (true_positives + false_positives) == 0.0:
+        precision = 0.0
+    else:
+        precision = true_positives / (true_positives + false_positives)
+
+    if (true_positives + false_negatives) == 0.0:
+        recall = 0.0
+    else:
+        recall = true_positives / (true_positives + false_negatives)
+
+    # Calculate F1 score
+    if (precision + recall) == 0.0:
+        f1_score = 0.0
+    else:
+        f1_score = 2 * (precision * recall) / (precision + recall)
+
+    return precision, recall, f1_score
 
 def collaborative_filter_plus(file_name: str, selectedUserID: int, k: int, n: int):
 
