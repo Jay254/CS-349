@@ -1,4 +1,6 @@
-# returns Euclidean distance between vectors and b
+import random
+
+# returns Euclidean distance between vectors a and b
 def euclidean(a, b):
     # read_data() doesn't convert values from csv to floats -> must do so for calculations
     a_converted = [float(x) for x in a]
@@ -14,7 +16,6 @@ def euclidean(a, b):
 
     # Not sure if allowed to import math -> power of 1/2 is the same thing
     return float(total ** (1 / 2))
-
 
 # returns Cosine Similarity between vectors and b
 def cosim(a, b):
@@ -41,7 +42,6 @@ def cosim(a, b):
 
     return float(numerator / (a_magnitude * b_magnitude))
 
-
 # returns Hamming distance between vectors and b
 def hamming(a, b):
     # read_data() doesn't convert values from csv to floats -> must do so for calculations
@@ -57,7 +57,6 @@ def hamming(a, b):
         print(e)
 
     return float(dist)
-
 
 # returns Pearson Correkation between vectors and b
 def pearson(a, b):
@@ -94,6 +93,10 @@ def pearson(a, b):
 # All hyper-parameters should be hard-coded in the algorithm.
 
 def knn(data,query,metric):
+
+    # Hyperparameters:
+    k = 11 # -> num neighbors to compare
+
     # IMPORTANT: read_data() structures mnsit data like so:
     # [label, [observation_data]]
     data_start_idx = 1
@@ -109,14 +112,9 @@ def knn(data,query,metric):
     for observation in query:
         float_query.append([float(pixel) for pixel in observation])
 
-
     # Transform data to make program run faster
     transformed_data = [[observation[label_index], knn_data_transformation(observation[data_start_idx])] for observation in float_data]
     transformed_query = [knn_data_transformation(observation) for observation in float_query]
-     
-
-    # Hyperparameters:
-    k = 11 # -> num neighbors to compare
     
     # Keep track of k nearest neigbors for each query
     # -> {query: [(distance1, label), (distance2, label), ...]}
@@ -131,8 +129,8 @@ def knn(data,query,metric):
             for cur_query in query_tuple_copy: 
                 # Label is present in observation data (first element), exclude it in calculation for correct distance
                 distance = euclidean(cur_query, observation[data_start_idx])
-                # Can insert distance immediatly (no checking) if we don't already have k neigbors
-                # NOTE: Converting curquery to tuple so we can use it as a dictionary key
+                # Can insert distance immediatly (no checking) if we don't already have k neighbors
+                # NOTE: Converting cur_query to tuple so we can use it as a dictionary key
                 if len(closest_neighbors[cur_query]) < k:
                     closest_neighbors[cur_query].append((observation[label_index], distance))
                     continue
@@ -227,8 +225,6 @@ def knn_get_mode_label(nbrs_dict: dict):
 # predictions -> list of labels from model's predictions
 # actual_values -> objective values to be compared against
 def display_incorrect_results(predictions: list, actual_values: list):
-
-
     count = 1
     correct = 0
     incorrect = 0
@@ -264,29 +260,76 @@ def display_incorrect_results(predictions: list, actual_values: list):
 # labels should be ignored in the training set
 # metric is a string specifying either "euclidean" or "cosim".  
 # All hyper-parameters should be hard-coded in the algorithm.
-def kmeans(data,query,metric):
+def kmeans(data, query, metric, k=11):
     # Convert input data to float format, ignoring labels
-    float_data = [list(map(float, observation[1])) for observation in data]
+    # default k-value as parameter for testing purposes
+    # float_data = [list(map(float, observation[1])) for observation in data]
+
+    # IMPORTANT: read_data() structures mnsit data like so:
+    # [label, [observation_data]]
+    data_start_idx = 1
+    label_index = 0
+
+    # Turn strings into floats to allow arithmetic
+    # print("untouched data \n")
+    # print(data[0])
+    float_data = []
+    for observation in data:
+        float_data.append([float(observation[label_index]), [float(pixel) for pixel in observation[data_start_idx]]])
+    # print("float_data\n")
+    # print(float_data[0])
+
+    # print("untouched query\n")
+    float_query = []
+    # print(query[0])
+    for observation in query:
+        # print(observation[data_start_idx])
+        float_query.append([float(pixel) for pixel in observation])
+    # print("float_query\n")
+    # print(float_query[0])
+
+    # transform data
+    transformed_data = [[observation[label_index], knn_data_transformation(observation[data_start_idx])] for observation in float_data]
+    transformed_query = [knn_data_transformation(observation) for observation in float_query]
+   #  transformed_data = [[observation[label_index], observation[data_start_idx]] for observation in float_data]
+    # transformed_query = [observation for observation in float_query]
+    # print("data transformed")
 
     # Hyper-parameter
-    k = 3  # Number of clusters
+    # k = 11 # Number of clusters for euclidean
+    # k = 20 # Number of clusters for cosim
+
+    if (metric == "euclidean"):
+        k = 11
+    else:
+        k = 20
+
+    print("k: ", k)
 
     max_iterations = 100 # Maximum number of iterations to prevent infinite loops
+    # print("max iters: ", max_iterations)
 
     # Step 1: Initialize centroids randomly from the data points
-    centroids = random.sample(float_data, k)
+    centroids = random.sample(transformed_data, k)
+    # print(centroids[0][1])
+    # print(centroids[1][1])
+    # print(centroids[2][1])
+    # print("initialized centroids")
 
     # Loop for a maximum number of iterations to refine clusters
     for iteration in range(max_iterations):
+        # print("iteration: ", iteration)
         # Step 2: Assign each observation to the closest centroid
+        # print(len(centroids))
         clusters = {i: [] for i in range(k)}
-        for observation in float_data:
+        for observation in transformed_data:
             # Determine the closest centroid based on the specified metric
             if metric == "euclidean":
-                distances = [euclidean(observation, centroids[i]) for i in range(k)]
+                # print("centroids")
+                distances = [euclidean(observation[data_start_idx], centroids[i][data_start_idx]) for i in range(k)]
                 closest_centroid_index = distances.index(min(distances))
             elif metric == "cosim":
-                similarities = [cosim(observation, centroids[i]) for i in range(k)]
+                similarities = [cosim(observation[data_start_idx], centroids[i][data_start_idx]) for i in range(k)]
                 closest_centroid_index = similarities.index(max(similarities))
             else:
                 raise ValueError(f"ERROR: Invalid distance metric: {metric}")
@@ -299,35 +342,33 @@ def kmeans(data,query,metric):
         for i in range(k):
             if clusters[i]:  # Check if cluster is not empty
                 # Calculate the new centroid as the mean of all points in the cluster
-                dimension_count = len(clusters[i][0])  # Get the number of dimensions
+                dimension_count = len(clusters[i][0][1])  # Get number of dimensions from observation data part
                 sums = [0] * dimension_count  # Initialize sums for each dimension
+                
                 for point in clusters[i]:
                     for dim in range(dimension_count):
-                        sums[dim] += point[dim]  # Accumulate the sums
+                        sums[dim] += point[1][dim]  # Accumulate the sums for each dimension of the data
+
                 new_centroid = [s / len(clusters[i]) for s in sums]  # Average each dimension
             else:
                 # If a cluster has no points, keep the old centroid
-                new_centroid = centroids[i]  # Keep the old centroid if no points are assigned
+                new_centroid = centroids[i][1]  # Keep the old centroid if no points are assigned
+
             new_centroids.append(new_centroid)
 
-        # Check for convergence: if centroids have not changed, exit loop
-        if new_centroids == centroids:
-            break
-        centroids = new_centroids # Update for next iteration
+        # Step 4: Predict labels for the query dataset based on final centroids
+        labels = []
+        for query_point in transformed_query:
+            if metric == "euclidean":
+                distances = [euclidean(query_point, centroid) for centroid in new_centroids]
+                closest_centroid_index = distances.index(min(distances))
+            elif metric == "cosim":
+                similarities = [cosim(query_point, centroid) for centroid in new_centroids]
+                closest_centroid_index = similarities.index(max(similarities))
 
-    # Step 4: Predict labels for the query dataset based on final centroids
-    labels = []
-    for query_point in query:
-        # Determine the closest centroid for each query point
-        if metric == "euclidean":
-            distances = [euclidean(query_point, centroids[i]) for i in range(k)]
-            closest_centroid_index = distances.index(min(distances))
-        elif metric == "cosim":
-            similarities = [cosim(query_point, centroids[i]) for i in range(k)]
-            closest_centroid_index = similarities.index(max(similarities))
-        # Add the predicted label for the query point
-        labels.append(closest_centroid_index)
-    return(labels) # Return the list of predicted labels for the query points
+            labels.append(centroids[closest_centroid_index][0])
+
+    return labels
 
 def get_user_ratings(filename):
     """Get ratings dictionary from a file"""
@@ -653,9 +694,7 @@ def collaborative_filter_plus(movielens_file: str, user_file: str, k: int, m: in
     sorted_recommendations = sorted(final_scores.items(), key=lambda x: x[1], reverse=True)
     return [movie_id for movie_id, _ in sorted_recommendations[:m]]
 
-
 def read_data(file_name):
-    
     data_set = []
     with open(file_name,'rt') as f:
         for line in f:
@@ -669,7 +708,6 @@ def read_data(file_name):
     return(data_set)
         
 def show(file_name,mode):
-    
     data_set = read_data(file_name)
     for obs in range(len(data_set)):
         for idx in range(784):
@@ -686,7 +724,7 @@ def show(file_name,mode):
         print(' ')
             
 def main():
-    show('valid.csv','pixels')
+    show('mnist_train.csv','pixels')
     
 if __name__ == "__main__":
     main()
