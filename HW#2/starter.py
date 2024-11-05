@@ -456,178 +456,202 @@ def calculate_tests(recommendations: list, actual_ratings: dict):
 
     return precision, recall, f1_score
 
-def collaborative_filter_plus(file_name: str, selectedUserID: int, k: int, n: int):
-
+def collaborative_filter_plus(movielens_file: str, user_file: str, k: int, m: int):
+    """
     # Finds similar users to a specified user ID and recommends movies based on ratings, demographics, and genre preferences.
-    # File_name -> name of file
-    # userID -> ID of user that we want to recommend movies to
+    # movielens_file -> main dataset file
+    # user_file -> target user ratings file
     # k -> number of similar users we want to consider
-    # n -> number of movies to recommend to user
-    
-    # demographic similarity
-    def demosim(user1_demo, user2_demo):
-        age_sim = 1 - abs(int(user1_demo['age']) - int(user2_demo['age']))/100 #normalize age similarity
-        gender_sim = 1 if user1_demo['gender'] == user2_demo['gender'] else 0
-        occupation_sim = 1 if user1_demo['occupation'] == user2_demo['occupation'] else 0
-        
-        # chhosen weights for demographic features
-        weights = {'age': 0.4, 'gender': 0.3, 'occupation': 0.3}
-        return (age_sim * weights['age'] + 
-                gender_sim * weights['gender'] + 
-                occupation_sim * weights['occupation'])
+    # m -> number of movies to recommend to user
+    """
+    if (k <= 0) or (m <= 0):
+        raise ValueError("Enter valid k and m values.")
 
-    #genre preference similarity
-    def gensim(user_movies):
-        genre_ratings = {}
+    #analyze user rating patterns
+    def calculate_rating_patterns(ratings):
+        if not ratings:
+            return 0, 0, {}
+        
+        values = list(ratings.values())
+        avg = sum(values) / len(values)
+        var = sum((x - avg) ** 2 for x in values) / len(values)
+        dist = {i: sum(1 for x in values if i-0.5 <= x < i+0.5) / len(values) 
+               for i in range(1, 6)}
+        return avg, var, dist
+
+    #get similarity between two user rating patterns
+    def rating_pattern_similarity(pattern1, pattern2):
+        avg1, var1, dist1 = pattern1
+        avg2, var2, dist2 = pattern2
+        
+        # rating distributions
+        dist_sim = sum(min(dist1.get(i, 0), dist2.get(i, 0)) for i in range(1, 6))
+        
+        # Compare rating behaviors
+        behavior_sim = 1 - (abs(avg1 - avg2) / 4)  # Normalize by max possible difference
+        variance_sim = 1 - (abs(var1 - var2) / 16)  # Max variance possible == 16
+        
+        return 0.4 * dist_sim + 0.3 * behavior_sim + 0.3 * variance_sim
+
+    #get gen prefs based on ratings
+    def calculate_genre_preferences(ratings_with_genres):
+        genre_scores = {}
         genre_counts = {}
         
-        for movie_id, movie_data in user_movies.items():
-            rating, genre = movie_data
-            if genre not in genre_ratings:
-                genre_ratings[genre] = []
-            try:
-                genre_ratings[genre].append(float(rating))
-                genre_counts[genre] = genre_counts.get(genre, 0) + 1
-            except ValueError:
-                continue
+        for movie_id, (rating, genre) in ratings_with_genres.items():
+            if genre not in genre_scores:
+                genre_scores[genre] = 0
+                genre_counts[genre] = 0
+            genre_scores[genre] += rating
+            genre_counts[genre] += 1
+        
+        #average rating per genre
+        preferences = {genre: genre_scores[genre] / genre_counts[genre] 
+                      for genre in genre_scores}
+        
+        # normalize those preferences
+        total = sum(preferences.values())
+        if total > 0:
+            preferences = {g: s/total for g, s in preferences.items()}
             
-        # avg rating per genre
-        genre_pref = {genre: sum(ratings)/len(ratings) 
-                           for genre, ratings in genre_ratings.items()}
-        return genre_pref, genre_counts
+        return preferences
 
-    selectedUserID = str(selectedUserID)
+    # load target user data
+    target_ratings = {}
+    target_info = None
+    target_movies = {}  # Store both rating and genre
+    
+    with open(user_file, "r") as f:
+        next(f) 
+        for line in f:
+            tokens = line.strip().split('\t')
+            movie_id = tokens[1]
+            rating = float(tokens[2])
+            genre = tokens[4]
+            
+            target_ratings[movie_id] = rating
+            target_movies[movie_id] = (rating, genre)
+            
+            #store demo info (only once)
+            if target_info is None:
+                target_info = {
+                    'age': int(tokens[5]),
+                    'gender': tokens[6],
+                    'occupation': tokens[7]
+                }
 
-    # parse user data
+    #target user rating patterns/prefs
+    target_patterns = calculate_rating_patterns(target_ratings)
+    target_preferences = calculate_genre_preferences(target_movies)
+
+    # other users' data
     users_data = {}
-    try:
-        with open(file_name, 'r') as f:
-            for line in f:
-                try:
-                    line = line.strip().split()
-                    if len(line) >= 8:  # Ensure we have all required fields
-                        userID = line[0]
-                        movie_id = line[1]
-                        rating = line[2]
-                        # title = line[3] #not needed rn
-                        genre = line[4]
-                        age = line[5]
-                        gender = line[6]
-                        occupation = line[7]
-                        
-                        if userID not in users_data:
-                            users_data[userID] = {
-                                'demographic': {'age': age, 'gender': gender, 'occupation': occupation},
-                                'movies': {}
-                            }
-                        
-                        users_data[userID]['movies'][movie_id] = (rating, genre)
-                except (IndexError, ValueError) as e:
-                    continue
-    except FileNotFoundError:
-        print(f"Error: File {file_name} not found")
-        return []
-
-    if selectedUserID not in users_data:
-        print(f"Error: User {selectedUserID} not found in dataset")
-        return []
-
-    # genre preferences for all users
-    for user_id in users_data:
-        try:
-            genre_prefs, genre_counts = gensim(users_data[user_id]['movies'])
-            users_data[user_id]['genre_prefs'] = genre_prefs
-            users_data[user_id]['genre_counts'] = genre_counts
-        except Exception as e:
-            print(f"Error calculating genre preferences for user {user_id}: {e}")
-            users_data[user_id]['genre_prefs'] = {}
-            users_data[user_id]['genre_counts'] = {}
+    with open(movielens_file, "r") as f:
+        next(f)  # skip header
+        for line in f:
+            tokens = line.strip().split('\t')
+            userID = tokens[0]
+            movie_id = tokens[1]
+            rating = float(tokens[2])
+            genre = tokens[4]
+            
+            if userID not in users_data:
+                users_data[userID] = {
+                    'ratings': {},
+                    'movies': {},
+                    'demographics': {
+                        'age': int(tokens[5]),
+                        'gender': tokens[6],
+                        'occupation': tokens[7]
+                    }
+                }
+            
+            users_data[userID]['ratings'][movie_id] = rating
+            users_data[userID]['movies'][movie_id] = (rating, genre)
 
     # get similar users
     similar_users = {}
-    target_user = users_data[selectedUserID]
+    min_common_movies = 5  # min threshold for common movies
     
-    for user_id, user_data in users_data.items():
-        if user_id == selectedUserID:#skip the user we getting recs for
-            continue
-            
+    for userID, user_data in users_data.items():
         try:
             # calculate rating similarity
-            similar_movies = set(target_user['movies'].keys()) & set(user_data['movies'].keys())
-            if similar_movies:
-                target_ratings = [float(target_user['movies'][m][0]) for m in similar_movies]
-                user_ratings = [float(user_data['movies'][m][0]) for m in similar_movies]
-                rating_sim = cosim(target_ratings, user_ratings)
-            else:
-                rating_sim = 0
+            common_movies = set(target_ratings.keys()) & set(user_data['ratings'].keys())
+            if len(common_movies) < min_common_movies:
+                continue
                 
-            # get demographic similarity
-            demo_sim = demosim(
-                target_user['demographic'],
-                user_data['demographic']
-            )
-                
-            # get genre pref similarity
-            genre_vectors = []
-            for user in [target_user, user_data]:
-                genre_vec = []
-                all_genres = set(user['genre_counts'].keys())
-                for genre in all_genres:
-                    genre_vec.append(user['genre_counts'].get(genre, 0))
-                genre_vectors.append(genre_vec)
+            target_vector = [target_ratings[m] for m in common_movies]
+            user_vector = [user_data['ratings'][m] for m in common_movies]
+            rating_sim = cosim(target_vector, user_vector)
             
-            genre_sim = cosim(genre_vectors[0], genre_vectors[1])
-                
-            # Combine those similarities with specific weights (based on ranked intuitive importance)
-            weights = {'rating': 0.5, 'demographic': 0.3, 'genre': 0.2} #add to 1 for normalization
-            combined_sim = (rating_sim * weights['rating'] + 
-                        demo_sim * weights['demographic'] + 
-                        genre_sim * weights['genre'])
-        
-            similar_users[user_id] = combined_sim
+            if rating_sim <= 0.1:  # min similarity threshold
+                continue
+
+            # rating pattern similarity
+            user_patterns = calculate_rating_patterns(user_data['ratings'])
+            pattern_sim = rating_pattern_similarity(target_patterns, user_patterns)
+
+            # genre pref similarity
+            user_preferences = calculate_genre_preferences(user_data['movies'])
+            
+            # comparing genre similarity using common genres
+            common_genres = set(target_preferences.keys()) & set(user_preferences.keys())
+            if common_genres:
+                genre_vector1 = [target_preferences.get(g, 0) for g in common_genres]
+                genre_vector2 = [user_preferences.get(g, 0) for g in common_genres]
+                genre_sim = cosim(genre_vector1, genre_vector2)
+            else:
+                genre_sim = 0
+
+            # demo similarity
+            age_diff = abs(target_info['age'] - user_data['demographics']['age'])
+            age_sim = max(0, 1 - age_diff/50)  # Linear decay up to 50 years difference
+            gender_sim = 1 if target_info['gender'] == user_data['demographics']['gender'] else 0
+            occ_sim = 1 if target_info['occupation'] == user_data['demographics']['occupation'] else 0
+            demo_sim = 0.5 * age_sim + 0.3 * gender_sim + 0.2 * occ_sim
+
+            # weighting based on common movies and rating similarity
+            common_weight = min(1.0, len(common_movies) / 50)
+            rating_base_weight = 0.6
+            rating_weight = rating_base_weight + (0.2 * common_weight)
+            remaining_weight = 1.0 - rating_weight
+            
+            # Combined simillarity metrics
+            combined_sim = (
+                rating_sim * rating_weight +
+                pattern_sim * (remaining_weight * 0.4) +
+                genre_sim * (remaining_weight * 0.4) +
+                demo_sim * (remaining_weight * 0.2)
+            )
+            
+            similar_users[userID] = combined_sim
 
         except Exception as e:
-            print(f"Error calculating similarity for user {user_id}: {e}")
             continue
-    # now get recommendations from top k similar users
-    sorted_similar_users = sorted(similar_users.items(), key=lambda x: x[1], reverse=True)
-    k_similar_users = sorted_similar_users[:k]
-    
-    # find movies rated by similar users but not by target user
+
+    # get recommendations from top k similar users
     recommendations = {}
-    target_movies = set(target_user['movies'].keys())
-    
-    for userID, similarity in k_similar_users:
-        user_movies = users_data[userID]['movies']
-        for movie_id, (rating, _) in user_movies.items():
-            if movie_id not in target_movies:
+    for userID, similarity in sorted(similar_users.items(), key=lambda x: x[1], reverse=True)[:k]:
+        user_ratings = users_data[userID]['ratings']
+        for movie_id, rating in user_ratings.items():
+            if movie_id not in target_ratings:
                 if movie_id not in recommendations:
                     recommendations[movie_id] = []
-                try:
-                    recommendations[movie_id].append(float(rating) * similarity)
-                except ValueError:
-                    continue
-                # recommendations[movie_id].append(float(rating) * similarity)
+                # Include both rating and similarity in the weighted calculation
+                recommendations[movie_id].append((rating, similarity))
 
-    # standardize scores
-    for movie_id, scores in recommendations.items():
-        recommendations[movie_id] = sum(scores) / len(scores)
+    # final scores emphasising on higher ratings
+    final_scores = {}
+    for movie_id, ratings_sims in recommendations.items():
+        if ratings_sims:
+            #square similarities to give more weight to more similar users
+            weighted_sum = sum(rating * (similarity ** 2) for rating, similarity in ratings_sims)
+            weight_sum = sum(similarity ** 2 for _, similarity in ratings_sims)
+            final_scores[movie_id] = weighted_sum / weight_sum if weight_sum > 0 else 0
 
-    # Sort recommendations according to score
-    sorted_recommendations = sorted(recommendations.items(), key=lambda item: item[1], reverse=True)
-
-    # top n movie recommendations
-    list_of_recommendations = []
-    count = 0
-    for movie_id, rating in sorted_recommendations:
-        # Ensure recommendation count doesn't exceed amount specified in function
-        if count >= n:
-            break
-        # Append movie ids
-        list_of_recommendations.append(movie_id)
-        count += 1
-
-    return list_of_recommendations
+    #top m recommendations
+    sorted_recommendations = sorted(final_scores.items(), key=lambda x: x[1], reverse=True)
+    return [movie_id for movie_id, _ in sorted_recommendations[:m]]
 
 
 def read_data(file_name):
