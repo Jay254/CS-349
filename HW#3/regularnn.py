@@ -108,7 +108,7 @@ def find_optimal_params(
                     }
 
                     print(f"(k={k}, epoch={epoch}, learning_rate={rate})")
-                    print(f"Regularized Accuracy: {reg_accuracy}")
+                    print(f"Regularized Accuracy: {reg_accuracy:.4f}")
                     print(f"Unregularized Accuracy: {unreg_accuracy:.4f}\n")
 
     return all_results
@@ -197,7 +197,7 @@ def make_regularized_MCE_FF(
             "unreg_valid_losses": unreg_valid_losses,
             "weight_norms": weight_norms,
             "orthogonality": orthogonality_values,
-        }
+        },
     )
 
 
