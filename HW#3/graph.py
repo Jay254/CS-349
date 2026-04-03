@@ -3,7 +3,7 @@ import torch
 import pandas as pd
 import numpy as np
 from Regularnn import RegularizedMCE_FF, make_regularized_MCE_FF
-from graph import draw_node_outputs_adapted
+# from graph import draw_node_outputs_adapted
 from matplotlib.colors import ListedColormap
 
 
@@ -129,7 +129,41 @@ def train_and_visualize(
 
     return reg_model, unreg_model, history
 
+def draw_node_outputs_adapted(nodes, model, test_file):
+    """
+    Visualizes individual node outputs using the same color scheme as the original plot
+    """
+    # Read test data
+    test_data = pd.read_csv(test_file)
+    X_test = test_data.iloc[:, 1:].values
+    y_test = test_data.iloc[:, 0].values
 
+    # Initialize the figure - now just for nodes, no composite
+    fig, axes = plt.subplots(1, nodes, figsize=(15, 5))
+
+    # Create mesh grid
+    h = 0.02  # Step size
+    x_min, x_max = X_test[:, 0].min() - 1, X_test[:, 0].max() + 1
+    y_min, y_max = X_test[:, 1].min() - 1, X_test[:, 1].max() + 1
+    xx, yy = np.meshgrid(np.arange(x_min, x_max, h), np.arange(y_min, y_max, h))
+
+    # Prepare grid data
+    grid = torch.tensor(np.c_[xx.ravel(), yy.ravel()], dtype=torch.float32)
+
+    # Get hidden layer outputs
+    with torch.no_grad():
+        hidden_outputs = model.hidden_layer(grid)
+
+        # Plot individual node outputs
+        for i in range(nodes):
+            Z_node = hidden_outputs[:, i].numpy().reshape(xx.shape)
+            axes[i].contourf(xx, yy, Z_node, cmap=plt.cm.RdBu, alpha=0.6)
+            axes[i].scatter(X_test[:, 0], X_test[:, 1], c=y_test, cmap=plt.cm.RdBu)
+            axes[i].set_title(f"Node {i}")
+
+    plt.tight_layout()
+    plt.show()
+    
 if __name__ == "__main__":
     # Run for XOR dataset with best parameters
     reg_model, unreg_model, history = train_and_visualize(
@@ -152,3 +186,4 @@ if __name__ == "__main__":
     print(f"\nFinal Test Accuracies:")
     print(f"Regularized Model: {reg_accuracy:.4f}")
     print(f"Unregularized Model: {unreg_accuracy:.4f}")
+
